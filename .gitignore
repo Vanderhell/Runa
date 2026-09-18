@@ -1,0 +1,8 @@
+/build*/
+/artifacts/
+/host/**/bin/
+/host/**/obj/
+/platform/esp32/build/
+/platform/esp32/sdkconfig
+*.user
+*.suo

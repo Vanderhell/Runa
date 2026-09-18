@@ -1,0 +1,33 @@
+idf_component_register(
+    SRCS
+        "esp32_main.c"
+        "../core/esp32_platform.c"
+        "../modules/gpio/esp32_gpio.c"
+        "../modules/adc/esp32_adc.c"
+        "../modules/pwm/esp32_pwm.c"
+        "../modules/spi/esp32_spi.c"
+        "../transport/usb_serial_jtag.c"
+        "../../../core/src/runa_decoder.c"
+        "../../../core/src/runa_result.c"
+        "../../../core/src/runa_validator.c"
+        "../../../core/src/runa_runtime.c"
+        "../../../core/src/runa_capabilities.c"
+        "../../../core/src/runa_resource.c"
+        "../../../core/src/runa_registry.c"
+        "../../../modules/gpio/src/runa_gpio.c"
+        "../../../modules/adc/src/runa_adc.c"
+        "../../../modules/pwm/src/runa_pwm.c"
+        "../../../modules/spi/src/runa_spi.c"
+    INCLUDE_DIRS
+        "."
+        "../include"
+        "../../../include"
+        "../../../core/include"
+        "../../../modules/gpio/include"
+        "../../../modules/adc/include"
+        "../../../modules/pwm/include"
+        "../../../modules/spi/include"
+        "../modules/spi"
+    REQUIRES esp_driver_gpio esp_adc esp_driver_ledc esp_driver_spi esp_driver_usb_serial_jtag esp_timer esp_system esp_psram spi_flash
+)
+target_compile_options(${COMPONENT_LIB} PRIVATE -Wall -Wextra -Wconversion -Wshadow -Werror)

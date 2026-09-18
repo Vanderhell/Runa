@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><TargetFramework>net9.0</TargetFramework><ImplicitUsings>enable</ImplicitUsings><Nullable>enable</Nullable><TreatWarningsAsErrors>true</TreatWarningsAsErrors></PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../Runa.Core/Runa.Core.csproj" />
+    <ProjectReference Include="../Runa.GPIO/Runa.GPIO.csproj" />
+    <ProjectReference Include="../Runa.ADC/Runa.ADC.csproj" />
+    <ProjectReference Include="../Runa.PWM/Runa.PWM.csproj" />
+    <ProjectReference Include="../Runa.SPI/Runa.SPI.csproj" />
+    <ProjectReference Include="../Runa.Transport.Serial/Runa.Transport.Serial.csproj" />
+  </ItemGroup>
+</Project>
