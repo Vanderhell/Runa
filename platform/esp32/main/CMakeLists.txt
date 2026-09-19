@@ -9,6 +9,8 @@ idf_component_register(
         "../modules/i2c/esp32_i2c.c"
         "../modules/uart/esp32_uart.c"
         "../modules/can/esp32_can.c"
+        "../modules/pulse/esp32_pulse.c"
+        "../modules/encoder/esp32_encoder.c"
         "../transport/usb_serial_jtag.c"
         "../../../core/src/runa_decoder.c"
         "../../../core/src/runa_result.c"
@@ -24,6 +26,8 @@ idf_component_register(
         "../../../modules/i2c/src/runa_i2c.c"
         "../../../modules/uart/src/runa_uart.c"
         "../../../modules/can/src/runa_can.c"
+        "../../../modules/pulse/src/runa_pulse.c"
+        "../../../modules/encoder/src/runa_encoder.c"
     INCLUDE_DIRS
         "."
         "../include"
@@ -36,10 +40,14 @@ idf_component_register(
         "../../../modules/i2c/include"
         "../../../modules/uart/include"
         "../../../modules/can/include"
+        "../../../modules/pulse/include"
+        "../../../modules/encoder/include"
         "../modules/spi"
         "../modules/i2c"
         "../modules/uart"
         "../modules/can"
-    REQUIRES esp_driver_gpio esp_adc esp_driver_ledc esp_driver_spi esp_driver_i2c esp_driver_uart esp_driver_twai esp_driver_usb_serial_jtag esp_timer esp_system esp_psram spi_flash
+        "../modules/pulse"
+        "../modules/encoder"
+    REQUIRES esp_driver_gpio esp_adc esp_driver_ledc esp_driver_spi esp_driver_i2c esp_driver_uart esp_driver_twai esp_driver_pcnt esp_driver_rmt esp_driver_usb_serial_jtag esp_timer esp_system esp_psram spi_flash
 )
 target_compile_options(${COMPONENT_LIB} PRIVATE -Wall -Wextra -Wconversion -Wshadow -Werror)

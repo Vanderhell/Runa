@@ -9,6 +9,13 @@
     <ProjectReference Include="../Runa.I2C/Runa.I2C.csproj" />
     <ProjectReference Include="../Runa.UART/Runa.UART.csproj" />
     <ProjectReference Include="../Runa.CAN/Runa.CAN.csproj" />
+    <ProjectReference Include="../Runa.Pulse/Runa.Pulse.csproj" />
+    <ProjectReference Include="../Runa.DAC/Runa.DAC.csproj" />
+    <ProjectReference Include="../Runa.Encoder/Runa.Encoder.csproj" />
+    <ProjectReference Include="../Runa.OneWire/Runa.OneWire.csproj" />
+    <ProjectReference Include="../Runa.BlockDevice/Runa.BlockDevice.csproj" />
+    <ProjectReference Include="../Runa.RTC/Runa.RTC.csproj" />
+    <ProjectReference Include="../Runa.Watchdog/Runa.Watchdog.csproj" />
     <ProjectReference Include="../Runa.Transport.Serial/Runa.Transport.Serial.csproj" />
   </ItemGroup>
 </Project>

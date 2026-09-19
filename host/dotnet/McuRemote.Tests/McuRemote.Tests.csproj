@@ -1,4 +1,9 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup><OutputType>Exe</OutputType><TargetFramework>net9.0</TargetFramework><ImplicitUsings>enable</ImplicitUsings><Nullable>enable</Nullable><TreatWarningsAsErrors>true</TreatWarningsAsErrors></PropertyGroup>
-  <ItemGroup><ProjectReference Include="../McuRemote/McuRemote.csproj" /></ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="../McuRemote/McuRemote.csproj" />
+    <ProjectReference Include="../Runa.BlockDevice/Runa.BlockDevice.csproj" />
+    <ProjectReference Include="../Runa.RTC/Runa.RTC.csproj" />
+    <ProjectReference Include="../Runa.Watchdog/Runa.Watchdog.csproj" />
+  </ItemGroup>
 </Project>
