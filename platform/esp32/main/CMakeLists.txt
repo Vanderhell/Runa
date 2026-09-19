@@ -6,6 +6,9 @@ idf_component_register(
         "../modules/adc/esp32_adc.c"
         "../modules/pwm/esp32_pwm.c"
         "../modules/spi/esp32_spi.c"
+        "../modules/i2c/esp32_i2c.c"
+        "../modules/uart/esp32_uart.c"
+        "../modules/can/esp32_can.c"
         "../transport/usb_serial_jtag.c"
         "../../../core/src/runa_decoder.c"
         "../../../core/src/runa_result.c"
@@ -18,6 +21,9 @@ idf_component_register(
         "../../../modules/adc/src/runa_adc.c"
         "../../../modules/pwm/src/runa_pwm.c"
         "../../../modules/spi/src/runa_spi.c"
+        "../../../modules/i2c/src/runa_i2c.c"
+        "../../../modules/uart/src/runa_uart.c"
+        "../../../modules/can/src/runa_can.c"
     INCLUDE_DIRS
         "."
         "../include"
@@ -27,7 +33,13 @@ idf_component_register(
         "../../../modules/adc/include"
         "../../../modules/pwm/include"
         "../../../modules/spi/include"
+        "../../../modules/i2c/include"
+        "../../../modules/uart/include"
+        "../../../modules/can/include"
         "../modules/spi"
-    REQUIRES esp_driver_gpio esp_adc esp_driver_ledc esp_driver_spi esp_driver_usb_serial_jtag esp_timer esp_system esp_psram spi_flash
+        "../modules/i2c"
+        "../modules/uart"
+        "../modules/can"
+    REQUIRES esp_driver_gpio esp_adc esp_driver_ledc esp_driver_spi esp_driver_i2c esp_driver_uart esp_driver_twai esp_driver_usb_serial_jtag esp_timer esp_system esp_psram spi_flash
 )
 target_compile_options(${COMPONENT_LIB} PRIVATE -Wall -Wextra -Wconversion -Wshadow -Werror)

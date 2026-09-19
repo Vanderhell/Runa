@@ -6,6 +6,9 @@
     <ProjectReference Include="../Runa.ADC/Runa.ADC.csproj" />
     <ProjectReference Include="../Runa.PWM/Runa.PWM.csproj" />
     <ProjectReference Include="../Runa.SPI/Runa.SPI.csproj" />
+    <ProjectReference Include="../Runa.I2C/Runa.I2C.csproj" />
+    <ProjectReference Include="../Runa.UART/Runa.UART.csproj" />
+    <ProjectReference Include="../Runa.CAN/Runa.CAN.csproj" />
     <ProjectReference Include="../Runa.Transport.Serial/Runa.Transport.Serial.csproj" />
   </ItemGroup>
 </Project>
