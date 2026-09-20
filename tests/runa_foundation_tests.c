@@ -1,6 +1,7 @@
 #include "runa_registry.h"
 #include "runa_resource.h"
 #include "runa_ir.h"
+#include "runa_capabilities.h"
 #include "runa_validator.h"
 
 #include <stdio.h>
@@ -101,6 +102,14 @@ int main(void) {
     }
     duplicate.module_id = 100u;
     if (runa_registry_add(&registry, &duplicate) != RUNA_ERR_OUT_OF_RANGE) return 10;
+    {
+        uint8_t capabilities[RUNA_MAX_CAPABILITY_BYTES];
+        size_t written = 0u;
+        runa_capabilities_view_t view;
+        if (runa_capabilities_encode(&registry, capabilities, sizeof capabilities, &written) != RUNA_OK ||
+            runa_capabilities_decode(capabilities, written, &view) != RUNA_OK ||
+            view.module_count != RUNA_MAX_MODULES) return 17;
+    }
     puts("runa foundation registry/resource checks passed");
     return 0;
 }
