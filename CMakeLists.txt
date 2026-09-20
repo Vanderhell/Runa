@@ -5,6 +5,7 @@ option(JOB_BUILD_TESTS "Build native tests" ON)
 option(JOB_BUILD_FUZZ "Build standalone fuzz driver" ON)
 option(JOB_ENABLE_SANITIZERS "Enable address and undefined behavior sanitizers" OFF)
 option(RUNA_BUILD_LIBFUZZER "Build the optional Clang libFuzzer release target" OFF)
+option(RUNA_BUILD_EXHAUSTIVE_TESTS "Build the deterministic first-principles verification campaign" OFF)
 option(RUNA_MODULE_GPIO "Build Runa.GPIO" ON)
 option(RUNA_MODULE_ADC "Build Runa.ADC" ON)
 option(RUNA_MODULE_PWM "Build Runa.PWM" ON)
@@ -212,6 +213,30 @@ else()
 endif()
 
 include(CTest)
+
+if(RUNA_BUILD_EXHAUSTIVE_TESTS AND RUNA_MODULE_GPIO AND RUNA_MODULE_ADC AND RUNA_MODULE_PWM
+   AND RUNA_MODULE_SPI AND RUNA_MODULE_I2C AND RUNA_MODULE_UART AND RUNA_MODULE_CAN
+   AND RUNA_MODULE_PULSE AND RUNA_MODULE_DAC AND RUNA_MODULE_ENCODER AND RUNA_MODULE_ONEWIRE
+   AND RUNA_MODULE_BLOCK_DEVICE AND RUNA_MODULE_RTC AND RUNA_MODULE_WATCHDOG)
+    add_executable(runa_verification tests/verification/runa_verification.c tests/test_builder.c)
+    target_include_directories(runa_verification PRIVATE
+        include core/include tests modules/gpio/include modules/adc/include modules/pwm/include
+        modules/spi/include modules/i2c/include modules/uart/include modules/can/include
+        modules/pulse/include modules/dac/include modules/encoder/include modules/onewire/include
+        modules/block_device/include modules/rtc/include modules/watchdog/include)
+    target_link_libraries(runa_verification PRIVATE job_engine)
+    target_compile_features(runa_verification PRIVATE c_std_11)
+    runa_apply_sanitizers(runa_verification)
+    if(MSVC)
+        target_compile_options(runa_verification PRIVATE /W4 /WX /permissive-)
+    else()
+        target_compile_options(runa_verification PRIVATE -Wall -Wextra -Wpedantic -Wconversion -Wshadow -Werror)
+    endif()
+    if(BUILD_TESTING)
+        add_test(NAME runa_exhaustive_verification COMMAND runa_verification)
+    endif()
+endif()
+
 if(BUILD_TESTING AND JOB_BUILD_TESTS)
     if(RUNA_MODULE_GPIO AND RUNA_MODULE_ADC AND RUNA_MODULE_PWM)
         add_executable(job_tests tests/job_tests.c tests/test_builder.c)
