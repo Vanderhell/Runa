@@ -7,6 +7,7 @@ on:
 jobs:
   windows-msvc:
     runs-on: windows-latest
+    timeout-minutes: 20
     strategy:
       matrix:
         configuration: [Debug, Release]
@@ -26,6 +27,7 @@ jobs:
 
   linux-strict:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     strategy:
       matrix:
         compiler: [gcc, clang]
@@ -42,11 +44,20 @@ jobs:
         run: cmake --build build --parallel
       - name: CTest
         run: ctest --test-dir build --output-on-failure
+      - name: Fuzz smoke
+        shell: bash
+        run: |
+          set -euo pipefail
+          for target in job_fuzz runa_capabilities_fuzz runa_dac_fuzz runa_block_device_fuzz runa_rtc_fuzz runa_watchdog_fuzz runa_modules_fuzz; do
+            test -x "build/$target"
+            : | "build/$target"
+          done
       - name: Host conformance
         run: dotnet run --project host/dotnet/McuRemote.Tests/McuRemote.Tests.csproj --configuration Release
 
   linux-sanitizers:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - name: Configure
@@ -60,6 +71,7 @@ jobs:
 
   dotnet:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4
