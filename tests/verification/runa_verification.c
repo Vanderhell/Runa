@@ -1149,6 +1149,44 @@ static void replay_and_cross_soak_family(verify_prng_t *prng) {
     }
 }
 
+static void registry_order_family(verify_prng_t *prng) {
+    runa_module_t modules[14];
+    composition_context_t contexts[14];
+    uint8_t data_a[RUNA_MAX_JOB_BYTES];
+    uint8_t data_b[RUNA_MAX_JOB_BYTES];
+    uint32_t i;
+    for (i = 0u; i < 14u; ++i) {
+        memset(&modules[i], 0, sizeof modules[i]);
+        memset(&contexts[i], 0, sizeof contexts[i]);
+        contexts[i].index = (uint8_t)i; contexts[i].fail_on = UINT8_MAX;
+        modules[i].module_id = (uint16_t)(i + 1u); modules[i].abi_version = RUNA_MODULE_ABI_VERSION;
+        modules[i].validate = composition_validate; modules[i].execute = composition_execute;
+        modules[i].begin = composition_begin; modules[i].end = composition_end;
+        modules[i].validate_resource = synthetic_resource; modules[i].context = &contexts[i];
+    }
+    for (i = 0u; i < 1000u; ++i) {
+        uint16_t selected[4]; uint8_t count = (uint8_t)(2u + next_u32(prng) % 3u);
+        uint32_t j; runa_module_registry_t first, second; runa_resource_table_t resources = { NULL, 0u };
+        runa_platform_t platform; uint64_t now_a = 0u, now_b = 0u;
+        verify_sink_t sink_a = { 0 }, sink_b = { 0 };
+        runa_event_sink_t events_a = { capture, &sink_a }, events_b = { capture, &sink_b };
+        runa_execution_summary_t a, b;
+        runa_registry_init(&first); runa_registry_init(&second);
+        for (j = 0u; j < count; ++j) selected[j] = (uint16_t)(1u + ((i + j * 5u) % 14u));
+        for (j = 1u; j < count; ++j) if (selected[j] == selected[0]) selected[j] = (uint16_t)(j + 1u);
+        for (j = 0u; j < 14u; ++j) (void)runa_registry_add(&first, &modules[j]);
+        for (j = 14u; j-- > 0u;) (void)runa_registry_add(&second, &modules[j]);
+        platform.context = &now_a; platform.time_us = verification_time; platform.delay_ms = verification_delay;
+        a = runa_process(data_a, make_composition_job(data_a, selected, count), &resources, &first, &platform, &events_a);
+        platform.context = &now_b;
+        b = runa_process(data_b, make_composition_job(data_b, selected, count), &resources, &second, &platform, &events_b);
+        ++g_stats.cases;
+        CHECK_EQ("registry-order", i, a.error, b.error); CHECK_EQ("registry-order", i, a.steps, b.steps);
+        CHECK_EQ("registry-order", i, sink_a.count, sink_b.count);
+        CHECK_TRUE("registry-order", i, memcmp(sink_a.bytes, sink_b.bytes, sizeof sink_a.bytes) == 0);
+    }
+}
+
 int main(void) {
     verify_prng_t prng = { UINT64_C(0x9e3779b97f4a7c15) };
     g_stats.family = "campaign";
@@ -1170,6 +1208,7 @@ int main(void) {
     state_model_family(&prng);
     bus_boundary_family(&prng);
     replay_and_cross_soak_family(&prng);
+    registry_order_family(&prng);
     printf("verification cases=%" PRIu64 " assertions=%" PRIu64
            " failures=%" PRIu64 " seed=0x%016" PRIx64
            " result_hash=0x%016" PRIx64 "\n",
