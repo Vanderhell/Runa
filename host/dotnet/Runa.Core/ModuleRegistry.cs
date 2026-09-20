@@ -4,6 +4,7 @@ public sealed record ModuleDescriptor(
     ushort ModuleId, byte AbiVersion, byte ModuleVersion, IReadOnlyList<byte> Operations);
 
 public sealed class ModuleRegistry {
+    public const int MaxModules = 24;
     private readonly IReadOnlyDictionary<ushort, ModuleDescriptor> modules;
 
     public ModuleRegistry(IEnumerable<ModuleDescriptor> descriptors) {
@@ -17,7 +18,7 @@ public sealed class ModuleRegistry {
             if (!indexed.TryAdd(descriptor.ModuleId, descriptor))
                 throw new ArgumentException("Duplicate module ID.", nameof(descriptors));
         }
-        if (indexed.Count > 16) throw new ArgumentOutOfRangeException(nameof(descriptors));
+        if (indexed.Count > MaxModules) throw new ArgumentOutOfRangeException(nameof(descriptors));
         modules = indexed;
     }
 
