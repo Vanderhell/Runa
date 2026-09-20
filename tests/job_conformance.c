@@ -1,5 +1,8 @@
 #include "job_runtime.h"
 #include "job_ir.h"
+#include "runa_ir.h"
+#include "runa_limits.h"
+#include "runa_opcode.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -18,7 +21,22 @@ static int run_one(const uint8_t *data,size_t count,uint32_t *value) {
  *value=output.value;
  return 1;
 }
+static size_t make_extension_job(uint8_t *job, uint32_t job_id, uint16_t module_id,
+                                 uint8_t operation, const uint8_t *payload, uint16_t payload_size) {
+ size_t extension_size=(size_t)5u+payload_size;size_t instruction_bytes=extension_size+3u;size_t total=RUNA_HEADER_SIZE+instruction_bytes;uint8_t *p=job+RUNA_HEADER_SIZE;
+ memset(job,0,total);job[0]='J';job[1]='E';job[2]='X';job[3]='E';job[4]=RUNA_PROTOCOL_VERSION;job[5]=RUNA_IR_VERSION_V2;
+ runa_write_u16_le(job+6u,RUNA_HEADER_SIZE);runa_write_u32_le(job+8u,job_id);runa_write_u32_le(job+12u,(uint32_t)total);runa_write_u32_le(job+16u,(uint32_t)instruction_bytes);
+ runa_write_u16_le(job+20u,2u);runa_write_u32_le(job+24u,10000u);runa_write_u32_le(job+28u,5000000u);runa_write_u16_le(job+32u,32u);runa_write_u16_le(job+34u,128u);runa_write_u32_le(job+36u,512u);
+ p[0]=RUNA_OP_EXT;p[1]=(uint8_t)(3u+payload_size);runa_write_u16_le(p+2u,module_id);p[4]=operation;if(payload_size!=0u)memcpy(p+5u,payload,payload_size);p+=extension_size;p[0]=RUNA_OP_RETURN;p[1]=1u;p[2]=0u;return total;
+}
 int main(int argc,char **argv){FILE *file=NULL;long length;uint8_t data[JOB_MAX_BYTES];size_t count;
+ if(argc==4&&strcmp(argv[1],"--encode-batch")==0){FILE *output=fopen(argv[3],"wb");uint8_t job[JOB_MAX_BYTES],payload[252];uint8_t record[7],length_bytes[2];uint32_t job_id;uint16_t module_id,payload_size;uint8_t operation;
+  if(output==NULL)return 3;
+  file=fopen(argv[2],"rb");
+  if(file==NULL){fclose(output);return 3;}
+  while(fread(record,1,7u,file)==7u){job_id=job_read_u32_le(record);module_id=job_read_u16_le(record+4u);operation=record[6];if(fread(length_bytes,1,2u,file)!=2u){fclose(file);fclose(output);return 5;}payload_size=job_read_u16_le(length_bytes);if(payload_size>sizeof payload||fread(payload,1,payload_size,file)!=payload_size){fclose(file);fclose(output);return 5;}{size_t job_size=make_extension_job(job,job_id,module_id,operation,payload,payload_size);uint8_t size_bytes[4];runa_write_u32_le(size_bytes,(uint32_t)job_size);if(fwrite(size_bytes,1,4u,output)!=4u||fwrite(job,1,job_size,output)!=job_size){fclose(file);fclose(output);return 6;}}}
+  fclose(file);fclose(output);return 0;
+ }
  if(argc==3&&strcmp(argv[1],"--batch")==0){uint64_t hash=UINT64_C(1469598103934665603);uint8_t header[4];uint32_t cases=0u;
   file=fopen(argv[2],"rb");if(!file)return 3;
   while(fread(header,1,4u,file)==4u){uint32_t size=job_read_u32_le(header);uint32_t value;
