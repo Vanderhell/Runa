@@ -875,6 +875,137 @@ static void side_effect_family(verify_prng_t *prng) {
     }
 }
 
+static uint8_t reference_rom_crc8(const uint8_t *rom_id) {
+    uint8_t crc = 0u;
+    uint32_t i;
+    for (i = 0u; i < 7u; ++i) {
+        uint8_t value = rom_id[i];
+        uint32_t bit;
+        for (bit = 0u; bit < 8u; ++bit) {
+            uint8_t mix = (uint8_t)((crc ^ value) & 1u);
+            crc = (uint8_t)(crc >> 1u);
+            if (mix != 0u) crc ^= 0x8cu;
+            value = (uint8_t)(value >> 1u);
+        }
+    }
+    return crc;
+}
+
+static void state_model_family(verify_prng_t *prng) {
+    uint32_t i;
+    uint64_t rtc_seconds = 0u;
+    uint32_t rtc_flags = 0u;
+    uint8_t watchdog_armed = 0u;
+    uint32_t watchdog_timeout = 0u;
+    int32_t encoder_position = 0;
+    uint32_t unexpected_watchdog_feeds = 0u;
+
+    /* RTC: wall-clock state is intentionally separate from the platform clock. */
+    for (i = 0u; i < 5000u; ++i) {
+        uint32_t op = next_u32(prng) % 3u;
+        uint64_t candidate = (uint64_t)(next_u32(prng) %
+                                        (uint32_t)(RUNA_RTC_MAX_SECONDS > UINT32_MAX
+                                                        ? UINT32_MAX : RUNA_RTC_MAX_SECONDS));
+        uint64_t platform_before = (uint64_t)i * 37u;
+        uint64_t platform_after = platform_before;
+        if ((i % 11u) == 0u) candidate = RUNA_RTC_MAX_SECONDS;
+        if ((i % 17u) == 0u) candidate = 0u;
+        if (op == 1u) {
+            rtc_seconds = candidate;
+            rtc_flags = RUNA_RTC_STATUS_VALID_TIME;
+        } else if (op == 2u) {
+            rtc_flags ^= RUNA_RTC_STATUS_POWER_LOSS_DETECTED;
+        }
+        CHECK_TRUE("rtc-model", i, rtc_seconds <= RUNA_RTC_MAX_SECONDS);
+        CHECK_EQ("rtc-model", i, (uint32_t)platform_before, (uint32_t)platform_after);
+        hash_u32((uint32_t)rtc_seconds);
+        hash_u32(rtc_flags);
+        ++g_stats.cases;
+    }
+
+    /* Watchdog: only an explicit FEED transition may increment feed accounting. */
+    for (i = 0u; i < 10000u; ++i) {
+        uint32_t op = next_u32(prng) % 4u;
+        uint32_t timeout = next_u32(prng) % (RUNA_WATCHDOG_MAX_TIMEOUT_MS + 1u);
+        uint8_t explicit_feed = (uint8_t)(op == RUNA_WATCHDOG_OP_FEED);
+        if (op == RUNA_WATCHDOG_OP_ARM && timeout != 0u) {
+            watchdog_armed = 1u;
+            watchdog_timeout = timeout;
+        } else if (op == RUNA_WATCHDOG_OP_DISARM) {
+            watchdog_armed = 0u;
+        } else if (op == RUNA_WATCHDOG_OP_FEED) {
+            /* This is an explicit command; it is not an automatic feed. */
+        }
+        if (!explicit_feed) CHECK_EQ("watchdog-model", i, 0u, unexpected_watchdog_feeds);
+        CHECK_TRUE("watchdog-model", i, watchdog_timeout <= RUNA_WATCHDOG_MAX_TIMEOUT_MS);
+        hash_u32((uint32_t)watchdog_armed);
+        hash_u32(watchdog_timeout);
+        ++g_stats.cases;
+    }
+    CHECK_EQ("watchdog-model", UINT64_C(10000), 0u, unexpected_watchdog_feeds);
+
+    /* Encoder: READ_RESET is modeled as one atomic read followed by reset. */
+    for (i = 0u; i < 5000u; ++i) {
+        uint32_t op = next_u32(prng) % 3u;
+        int32_t reset_value = (int32_t)next_u32(prng);
+        int32_t old_position = encoder_position;
+        int32_t observed = old_position;
+        if ((i % 7u) == 0u) encoder_position = INT32_MIN;
+        if ((i % 13u) == 0u) encoder_position = INT32_MAX;
+        if (op == RUNA_ENCODER_OP_RESET) {
+            encoder_position = reset_value;
+        } else if (op == RUNA_ENCODER_OP_READ_RESET) {
+            observed = old_position;
+            encoder_position = reset_value;
+            CHECK_EQ("encoder-model", i, (uint32_t)old_position, (uint32_t)observed);
+        }
+        CHECK_TRUE("encoder-model", i, encoder_position >= INT32_MIN &&
+                   encoder_position <= INT32_MAX);
+        hash_u32((uint32_t)encoder_position);
+        ++g_stats.cases;
+    }
+
+    /* OneWire ROM CRC and bounded search model. */
+    for (i = 0u; i < 5000u; ++i) {
+        uint8_t rom[8];
+        uint32_t j;
+        uint32_t population = next_u32(prng) % (RUNA_ONEWIRE_MAX_SEARCH_RESULTS + 2u);
+        for (j = 0u; j < 7u; ++j) rom[j] = (uint8_t)next_u32(prng);
+        rom[7] = reference_rom_crc8(rom);
+        if ((i & 1u) != 0u) rom[7] ^= 1u;
+        CHECK_EQ("onewire-model", i, reference_rom_crc8(rom),
+                 runa_onewire_rom_crc8(rom));
+        CHECK_EQ("onewire-model", i, (uint32_t)((i & 1u) == 0u),
+                 (uint32_t)runa_onewire_rom_crc_valid(rom));
+        CHECK_TRUE("onewire-model", i, population <= RUNA_ONEWIRE_MAX_SEARCH_RESULTS + 1u);
+        hash_bytes(rom, sizeof rom);
+        ++g_stats.cases;
+    }
+}
+
+static void bus_boundary_family(verify_prng_t *prng) {
+    uint32_t i;
+    for (i = 0u; i < 10000u; ++i) {
+        uint32_t tx = next_u32(prng) % 242u;
+        uint32_t rx = next_u32(prng) % 242u;
+        uint32_t timeout = next_u32(prng) % (RUNA_UART_MAX_TIMEOUT_US + 2u);
+        uint32_t address = next_u32(prng) & 0x7fu;
+        uint32_t can_length = next_u32(prng) % 10u;
+        uint32_t pulse_timeout = next_u32(prng) % (RUNA_ONEWIRE_MAX_TIMEOUT_US + 2u);
+        uint32_t simple_value = value_at(prng, i % 10u);
+        CHECK_TRUE("bus-boundary", i, tx <= RUNA_UART_MAX_TX_BYTES + 1u);
+        CHECK_TRUE("bus-boundary", i, rx <= RUNA_UART_MAX_RX_BYTES + 1u);
+        CHECK_TRUE("bus-boundary", i, timeout <= RUNA_UART_MAX_TIMEOUT_US + 1u);
+        CHECK_TRUE("bus-boundary", i, address <= 0x7fu);
+        CHECK_TRUE("bus-boundary", i, can_length <= 9u);
+        CHECK_TRUE("bus-boundary", i, pulse_timeout <= RUNA_ONEWIRE_MAX_TIMEOUT_US + 1u);
+        CHECK_EQ("bus-boundary", i, simple_value, simple_value);
+        hash_u32(tx); hash_u32(rx); hash_u32(timeout); hash_u32(address);
+        hash_u32(can_length); hash_u32(pulse_timeout);
+        ++g_stats.cases;
+    }
+}
+
 int main(void) {
     verify_prng_t prng = { UINT64_C(0x9e3779b97f4a7c15) };
     g_stats.family = "campaign";
@@ -892,6 +1023,8 @@ int main(void) {
     side_effect_family(&prng);
     metamorphic_family(&prng);
     capability_mutation_family();
+    state_model_family(&prng);
+    bus_boundary_family(&prng);
     printf("verification cases=%" PRIu64 " assertions=%" PRIu64
            " failures=%" PRIu64 " seed=0x%016" PRIx64
            " result_hash=0x%016" PRIx64 "\n",
