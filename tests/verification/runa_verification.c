@@ -1071,6 +1071,84 @@ static void bus_boundary_family(verify_prng_t *prng) {
     }
 }
 
+static void replay_and_cross_soak_family(verify_prng_t *prng) {
+    uint32_t corpus;
+    for (corpus = 0u; corpus < 1000u; ++corpus) {
+        test_job_t job;
+        job_mock_hal_t hal;
+        verify_sink_t reference = { 0 };
+        job_execution_summary_t expected;
+        uint32_t value = next_u32(prng);
+        test_job_init(&job, 0x91000000u + corpus);
+        test_load(&job, 1u, value);
+        test_return(&job, 1u);
+        job_mock_hal_init(&hal);
+        expected = run_job(&job, &hal, &reference);
+        for (uint32_t repetition = 0u; repetition < 100u; ++repetition) {
+            verify_sink_t actual = { 0 };
+            job_execution_summary_t summary;
+            job_mock_hal_init(&hal);
+            summary = run_job(&job, &hal, &actual);
+            ++g_stats.cases;
+            CHECK_EQ("determinism-replay", corpus, expected.error, summary.error);
+            CHECK_EQ("determinism-replay", corpus, expected.steps, summary.steps);
+            CHECK_EQ("determinism-replay", corpus, reference.count, actual.count);
+            CHECK_TRUE("determinism-replay", corpus,
+                       memcmp(&reference.sizes, &actual.sizes, sizeof reference.sizes) == 0 &&
+                       memcmp(reference.bytes, actual.bytes, sizeof reference.bytes) == 0);
+            hash_u32(summary.error); hash_u32(summary.steps);
+            hash_bytes(actual.bytes, sizeof actual.bytes);
+        }
+    }
+
+    {
+        runa_module_t modules[14];
+        composition_context_t contexts[14];
+        runa_module_registry_t registry;
+        runa_resource_table_t resources = { NULL, 0u };
+        uint8_t data[RUNA_MAX_JOB_BYTES];
+        uint32_t i;
+        for (i = 0u; i < 14u; ++i) {
+            memset(&contexts[i], 0, sizeof contexts[i]);
+            contexts[i].index = (uint8_t)i;
+            contexts[i].fail_on = UINT8_MAX;
+            memset(&modules[i], 0, sizeof modules[i]);
+            modules[i].module_id = (uint16_t)(i + 1u);
+            modules[i].abi_version = RUNA_MODULE_ABI_VERSION;
+            modules[i].validate = composition_validate;
+            modules[i].execute = composition_execute;
+            modules[i].begin = composition_begin;
+            modules[i].end = composition_end;
+            modules[i].validate_resource = synthetic_resource;
+            modules[i].context = &contexts[i];
+            (void)runa_registry_add(&registry, &modules[i]);
+        }
+        for (i = 0u; i < 1000000u; ++i) {
+            uint16_t selected[4];
+            uint8_t count = (uint8_t)(2u + (next_u32(prng) % 3u));
+            uint32_t j;
+            uint64_t now = 0u;
+            runa_platform_t platform = { &now, verification_time, verification_delay };
+            verify_sink_t events = { 0 };
+            runa_event_sink_t sink = { capture, &events };
+            runa_execution_summary_t summary;
+            for (j = 0u; j < 14u; ++j) {
+                contexts[j].begins = contexts[j].ends = contexts[j].executes = 0u;
+                contexts[j].fail_on = UINT8_MAX;
+            }
+            for (j = 0u; j < count; ++j) selected[j] = (uint16_t)(1u + ((i + j * 7u) % 14u));
+            for (j = 1u; j < count; ++j) if (selected[j] == selected[0]) selected[j] = (uint16_t)(j + 1u);
+            summary = runa_process(data, make_composition_job(data, selected, count),
+                                   &resources, &registry, &platform, &sink);
+            ++g_stats.cases;
+            CHECK_EQ("cross-module-soak", i, RUNA_OK, summary.error);
+            CHECK_EQ("cross-module-soak", i, count + 1u, summary.steps);
+            hash_u32(summary.error); hash_u32(summary.steps);
+            hash_u32((uint32_t)count);
+        }
+    }
+}
+
 int main(void) {
     verify_prng_t prng = { UINT64_C(0x9e3779b97f4a7c15) };
     g_stats.family = "campaign";
@@ -1091,6 +1169,7 @@ int main(void) {
     capability_mutation_family();
     state_model_family(&prng);
     bus_boundary_family(&prng);
+    replay_and_cross_soak_family(&prng);
     printf("verification cases=%" PRIu64 " assertions=%" PRIu64
            " failures=%" PRIu64 " seed=0x%016" PRIx64
            " result_hash=0x%016" PRIx64 "\n",
