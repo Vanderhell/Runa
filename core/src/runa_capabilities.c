@@ -4,27 +4,28 @@
 
 #define RUNA_MODULE_RECORD_HEADER_SIZE 10u
 
-static size_t module_payload(const runa_module_t *module, uint8_t *buffer) {
+static size_t module_payload_size(const runa_module_t *module) {
     if (module->capabilities == NULL) return 0u;
-    return module->capabilities(module->context, buffer, RUNA_MAX_MODULE_CAPABILITY_PAYLOAD);
+    return module->capabilities(module->context, NULL, 0u);
 }
 
 runa_status_t runa_capabilities_encode(const runa_module_registry_t *registry,
                                        uint8_t *output, size_t capacity, size_t *written) {
-    uint8_t payloads[RUNA_MAX_MODULES][RUNA_MAX_MODULE_CAPABILITY_PAYLOAD];
-    uint8_t payload_sizes[RUNA_MAX_MODULES];
+    uint8_t payload[RUNA_MAX_MODULE_CAPABILITY_PAYLOAD];
     size_t total = RUNA_CAPABILITIES_HEADER_SIZE;
     uint8_t index;
     if (written == NULL) return RUNA_ERR_INVALID_FORMAT;
     *written = 0u;
     if (runa_registry_validate(registry) != RUNA_OK) return RUNA_ERR_INVALID_FORMAT;
     for (index = 0u; index < registry->count; ++index) {
-        size_t payload_size = module_payload(registry->modules[index], payloads[index]);
+        size_t payload_size = module_payload_size(registry->modules[index]);
         if (payload_size > RUNA_MAX_MODULE_CAPABILITY_PAYLOAD || payload_size > UINT8_MAX)
             return RUNA_ERR_OUT_OF_RANGE;
-        payload_sizes[index] = (uint8_t)payload_size;
+        if (total > RUNA_MAX_CAPABILITY_BYTES - RUNA_MODULE_RECORD_HEADER_SIZE ||
+            payload_size > RUNA_MAX_CAPABILITY_BYTES - total - RUNA_MODULE_RECORD_HEADER_SIZE)
+            return RUNA_ERR_OUT_OF_RANGE;
         total += RUNA_MODULE_RECORD_HEADER_SIZE + payload_size;
-        if (total > RUNA_MAX_CAPABILITY_BYTES || total > UINT16_MAX) return RUNA_ERR_OUT_OF_RANGE;
+        if (total > UINT16_MAX) return RUNA_ERR_OUT_OF_RANGE;
     }
     if (output == NULL || capacity < total) return RUNA_ERR_OUT_OF_RANGE;
     output[0] = RUNA_CAPABILITIES_FORMAT_VERSION;
@@ -45,17 +46,21 @@ runa_status_t runa_capabilities_encode(const runa_module_registry_t *registry,
     total = RUNA_CAPABILITIES_HEADER_SIZE;
     for (index = 0u; index < registry->count; ++index) {
         const runa_module_t *module = registry->modules[index];
-        uint16_t record_size = (uint16_t)(RUNA_MODULE_RECORD_HEADER_SIZE + payload_sizes[index]);
+        size_t payload_size = module_payload_size(module);
+        uint16_t record_size = (uint16_t)(RUNA_MODULE_RECORD_HEADER_SIZE + payload_size);
         runa_write_u16_le(output + total, record_size);
         output[total + 2u] = RUNA_CAPABILITY_RECORD_MODULE;
         output[total + 3u] = 0u;
         runa_write_u16_le(output + total + 4u, module->module_id);
         output[total + 6u] = module->abi_version;
         output[total + 7u] = module->module_version;
-        runa_write_u16_le(output + total + 8u, payload_sizes[index]);
-        if (payload_sizes[index] != 0u)
-            for (uint8_t payload_index = 0u; payload_index < payload_sizes[index]; ++payload_index)
-                output[total + RUNA_MODULE_RECORD_HEADER_SIZE + payload_index] = payloads[index][payload_index];
+        runa_write_u16_le(output + total + 8u, (uint16_t)payload_size);
+        if (payload_size != 0u) {
+            size_t payload_index;
+            (void)module->capabilities(module->context, payload, sizeof payload);
+            for (payload_index = 0u; payload_index < payload_size; ++payload_index)
+                output[total + RUNA_MODULE_RECORD_HEADER_SIZE + payload_index] = payload[payload_index];
+        }
         total += record_size;
     }
     *written = total;

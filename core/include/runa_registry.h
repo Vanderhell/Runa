@@ -5,7 +5,9 @@
 #include "runa_error.h"
 #include "runa_module.h"
 
-#define RUNA_MAX_MODULES 16u
+/* IDs 1..14 are currently assigned. Keep bounded headroom for ABI-compatible
+ * composition without scaling capability encoder stack usage with capacity. */
+#define RUNA_MAX_MODULES 24u
 
 typedef struct runa_module_registry {
     const runa_module_t *modules[RUNA_MAX_MODULES];
