@@ -4,7 +4,7 @@
 #include "runa_resource.h"
 
 static uint8_t edge_bit(uint8_t edge) {
-    return edge <= RUNA_PULSE_EDGE_BOTH ? (uint8_t)(1u << edge) : 0u;
+    return (uint8_t)(edge <= RUNA_PULSE_EDGE_BOTH ? (1u << edge) : 0u);
 }
 
 static runa_status_t validate_resource(void *context, const runa_resource_t *resource,

@@ -13,6 +13,11 @@ static int discard(void *context, const uint8_t *data, size_t size) {
     return 0;
 }
 
+static uint64_t time_us(void *context) {
+    (void)context;
+    return 0u;
+}
+
 int main(void) {
     uint8_t input[RUNA_MAX_JOB_BYTES];
     uint8_t storage[256];
@@ -32,7 +37,7 @@ int main(void) {
         RUNA_PERMISSION_READ | RUNA_PERMISSION_WRITE, 1u, &config
     };
     runa_resource_table_t resources = { &resource, 1u };
-    runa_platform_t platform = { NULL, NULL, NULL };
+    runa_platform_t platform = { NULL, time_us, NULL };
     runa_event_sink_t sink = { discard, NULL };
 
     if (size == 0u) return 0;

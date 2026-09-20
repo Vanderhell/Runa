@@ -162,7 +162,9 @@ runa_status_t runa_registry_begin_job(const runa_module_registry_t *registry,
         if (module->begin == NULL) continue;
         status = module->begin(module->context, job);
         if (status != RUNA_OK) {
-            (void)end_prefix(registry, job, status, (uint8_t)(index + 1u));
+            /* The failing module did not complete begin; only unwind modules
+             * whose begin callback returned success. */
+            (void)end_prefix(registry, job, status, index);
             return status;
         }
     }

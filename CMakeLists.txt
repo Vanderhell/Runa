@@ -19,6 +19,38 @@ option(RUNA_MODULE_BLOCK_DEVICE "Build Runa.BlockDevice" OFF)
 option(RUNA_MODULE_RTC "Build Runa.RTC" OFF)
 option(RUNA_MODULE_WATCHDOG "Build Runa.Watchdog" OFF)
 
+if(JOB_ENABLE_SANITIZERS)
+    add_library(runa_sanitizer_options INTERFACE)
+    if(MSVC AND CMAKE_C_COMPILER_ID MATCHES "Clang")
+        target_compile_options(runa_sanitizer_options INTERFACE /fsanitize=address /Oy-)
+        execute_process(COMMAND ${CMAKE_C_COMPILER} --print-resource-dir
+            OUTPUT_VARIABLE JOB_CLANG_RESOURCE_DIR OUTPUT_STRIP_TRAILING_WHITESPACE)
+        find_library(JOB_ASAN_RUNTIME clang_rt.asan_dynamic-x86_64
+            PATHS "${JOB_CLANG_RESOURCE_DIR}/lib/windows" NO_DEFAULT_PATH REQUIRED)
+        find_library(JOB_ASAN_THUNK clang_rt.asan_dynamic_runtime_thunk-x86_64
+            PATHS "${JOB_CLANG_RESOURCE_DIR}/lib/windows" NO_DEFAULT_PATH REQUIRED)
+        set(JOB_ASAN_DIRECTORY "${JOB_CLANG_RESOURCE_DIR}/lib/windows")
+        target_link_libraries(runa_sanitizer_options INTERFACE
+            "${JOB_ASAN_RUNTIME}" "${JOB_ASAN_THUNK}")
+    elseif(NOT MSVC)
+        target_compile_options(runa_sanitizer_options INTERFACE
+            -fsanitize=address,undefined -fno-omit-frame-pointer)
+        target_link_options(runa_sanitizer_options INTERFACE
+            -fsanitize=address,undefined)
+    endif()
+endif()
+
+function(runa_apply_sanitizers target)
+    if(JOB_ENABLE_SANITIZERS)
+        target_link_libraries(${target} PUBLIC runa_sanitizer_options)
+        if(MSVC AND CMAKE_C_COMPILER_ID MATCHES "Clang")
+            target_compile_options(${target} PRIVATE /fsanitize=address /Oy-)
+        elseif(NOT MSVC)
+            target_compile_options(${target} PRIVATE -fsanitize=address,undefined -fno-omit-frame-pointer)
+        endif()
+    endif()
+endfunction()
+
 add_library(runa_core STATIC
     core/src/runa_decoder.c
     core/src/runa_result.c
@@ -29,6 +61,7 @@ add_library(runa_core STATIC
     core/src/runa_registry.c)
 target_include_directories(runa_core PUBLIC core/include)
 target_compile_features(runa_core PUBLIC c_std_11)
+runa_apply_sanitizers(runa_core)
 if(MSVC)
     target_compile_options(runa_core PRIVATE /W4 /WX /permissive-)
 else()
@@ -42,6 +75,7 @@ function(runa_add_module target source module_include)
     target_include_directories(${target} PUBLIC ${module_include} core/include)
     target_link_libraries(${target} PUBLIC Runa::Core)
     target_compile_features(${target} PUBLIC c_std_11)
+    runa_apply_sanitizers(${target})
     if(MSVC)
         target_compile_options(${target} PRIVATE /W4 /WX /permissive-)
     else()
@@ -126,6 +160,7 @@ target_compile_definitions(job_engine PRIVATE
     RUNA_MODULE_RTC=$<BOOL:${RUNA_MODULE_RTC}>
     RUNA_MODULE_WATCHDOG=$<BOOL:${RUNA_MODULE_WATCHDOG}>)
 target_link_libraries(job_engine PUBLIC runa_core)
+runa_apply_sanitizers(job_engine)
 if(RUNA_MODULE_GPIO)
     target_link_libraries(job_engine PUBLIC runa_gpio)
 endif()
@@ -173,23 +208,6 @@ if(MSVC)
     target_compile_options(job_engine PRIVATE /W4 /WX /permissive-)
 else()
     target_compile_options(job_engine PRIVATE -Wall -Wextra -Wpedantic -Wconversion -Wshadow -Werror)
-endif()
-
-if(JOB_ENABLE_SANITIZERS)
-    if(MSVC AND CMAKE_C_COMPILER_ID MATCHES "Clang")
-        target_compile_options(job_engine PUBLIC /fsanitize=address /Oy-)
-        execute_process(COMMAND ${CMAKE_C_COMPILER} --print-resource-dir
-            OUTPUT_VARIABLE JOB_CLANG_RESOURCE_DIR OUTPUT_STRIP_TRAILING_WHITESPACE)
-        find_library(JOB_ASAN_RUNTIME clang_rt.asan_dynamic-x86_64
-            PATHS "${JOB_CLANG_RESOURCE_DIR}/lib/windows" NO_DEFAULT_PATH REQUIRED)
-        find_library(JOB_ASAN_THUNK clang_rt.asan_dynamic_runtime_thunk-x86_64
-            PATHS "${JOB_CLANG_RESOURCE_DIR}/lib/windows" NO_DEFAULT_PATH REQUIRED)
-        set(JOB_ASAN_DIRECTORY "${JOB_CLANG_RESOURCE_DIR}/lib/windows")
-        target_link_libraries(job_engine PUBLIC "${JOB_ASAN_RUNTIME}" "${JOB_ASAN_THUNK}")
-    elseif(NOT MSVC)
-        target_compile_options(job_engine PUBLIC -fsanitize=address,undefined -fno-omit-frame-pointer)
-        target_link_options(job_engine PUBLIC -fsanitize=address,undefined)
-    endif()
 endif()
 
 include(CTest)
@@ -368,6 +386,13 @@ if(JOB_BUILD_FUZZ)
         target_compile_options(job_fuzz PRIVATE /W4 /WX /permissive-)
     else()
         target_compile_options(job_fuzz PRIVATE -Wall -Wextra -Wpedantic -Wconversion -Wshadow -Werror)
+    endif()
+    add_executable(runa_capabilities_fuzz fuzz/runa_capabilities_fuzz.c)
+    target_link_libraries(runa_capabilities_fuzz PRIVATE runa_core)
+    if(MSVC)
+        target_compile_options(runa_capabilities_fuzz PRIVATE /W4 /WX /permissive-)
+    else()
+        target_compile_options(runa_capabilities_fuzz PRIVATE -Wall -Wextra -Wpedantic -Wconversion -Wshadow -Werror)
     endif()
     if(RUNA_MODULE_DAC)
         add_executable(runa_dac_fuzz fuzz/runa_dac_fuzz.c)

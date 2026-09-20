@@ -177,8 +177,8 @@ runa_execution_summary_t runa_process(const uint8_t *data, size_t size,
         if (active[active_count]->begin != NULL) {
             status = active[active_count]->begin(active[active_count]->context, &module_job);
             if (status != RUNA_OK) {
-                uint8_t begun = (uint8_t)(active_count + 1u);
-                (void)finish_modules(active, begun, &module_job, status);
+                /* Do not call end on the module whose begin failed. */
+                (void)finish_modules(active, active_count, &module_job, status);
                 send_result(&summary, sink, decoded.header.job_id, status, UINT16_MAX, 0u, NULL, 0u);
                 return summary;
             }

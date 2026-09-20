@@ -97,7 +97,7 @@ static size_t make_job(uint8_t *job, uint8_t operation, uint16_t resource_id, ui
     instruction += 2u + instruction[1];
     instruction[0] = RUNA_OP_RETURN;
     instruction[1] = 1u;
-    instruction[2] = operation == RUNA_ENCODER_OP_RESET ? 0u : (uint8_t)(1u << reg);
+    instruction[2] = (uint8_t)(operation == RUNA_ENCODER_OP_RESET ? 0u : (1u << reg));
     return RUNA_HEADER_SIZE + instruction_bytes;
 }
 
