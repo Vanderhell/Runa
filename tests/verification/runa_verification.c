@@ -19,6 +19,7 @@
 #include "runa_watchdog.h"
 #include "runa_block_device_mock_hal.h"
 #include "runa_validator.h"
+#include "runa_runtime.h"
 #include "runa_ir.h"
 #include "runa_limits.h"
 
@@ -47,6 +48,25 @@ typedef struct {
 
 static verify_stats_t g_stats = { 0u, 0u, 0u, 0x6d637572756e61ULL, 0u, "" };
 static const job_resource_table_t g_empty_resources = { NULL, 0u };
+static uint64_t g_result_hash = UINT64_C(1469598103934665603);
+
+static void hash_bytes(const void *data, size_t size) {
+    const uint8_t *bytes = (const uint8_t *)data;
+    size_t i;
+    for (i = 0u; i < size; ++i) {
+        g_result_hash ^= bytes[i];
+        g_result_hash *= UINT64_C(1099511628211);
+    }
+}
+
+static void hash_u32(uint32_t value) {
+    uint8_t bytes[4];
+    bytes[0] = (uint8_t)value;
+    bytes[1] = (uint8_t)(value >> 8u);
+    bytes[2] = (uint8_t)(value >> 16u);
+    bytes[3] = (uint8_t)(value >> 24u);
+    hash_bytes(bytes, sizeof bytes);
+}
 
 static uint32_t next_u32(verify_prng_t *prng) {
     uint64_t x = prng->state;
@@ -612,6 +632,249 @@ static void block_model_family(verify_prng_t *prng) {
     }
 }
 
+typedef struct composition_context {
+    uint32_t begins;
+    uint32_t ends;
+    uint32_t executes;
+    uint32_t selected;
+    uint8_t index;
+} composition_context_t;
+
+static runa_status_t composition_begin(void *context, const runa_module_job_t *job) {
+    composition_context_t *state = (composition_context_t *)context;
+    (void)job;
+    ++state->begins;
+    return RUNA_OK;
+}
+
+static runa_status_t composition_end(void *context, const runa_module_job_t *job,
+                                     runa_status_t status) {
+    composition_context_t *state = (composition_context_t *)context;
+    (void)job; (void)status;
+    ++state->ends;
+    return RUNA_OK;
+}
+
+static runa_status_t composition_validate(void *context, const runa_module_job_t *job,
+                                          const runa_module_instruction_t *instruction,
+                                          uint32_t *detail) {
+    (void)context; (void)job; (void)detail;
+    return instruction != NULL && instruction->operation == 1u &&
+           instruction->operand_size == 0u ? RUNA_OK : RUNA_ERR_INVALID_OPERAND;
+}
+
+static runa_status_t composition_execute(void *context, runa_module_job_t *job,
+                                         const runa_module_instruction_t *instruction,
+                                         uint32_t *detail) {
+    composition_context_t *state = (composition_context_t *)context;
+    (void)job; (void)instruction; (void)detail;
+    ++state->executes;
+    return RUNA_OK;
+}
+
+static size_t make_composition_job(uint8_t *data, const uint16_t *module_ids,
+                                   uint8_t module_count) {
+    size_t offset = RUNA_HEADER_SIZE;
+    uint8_t i;
+    memset(data, 0, RUNA_MAX_JOB_BYTES);
+    data[0] = 'J'; data[1] = 'E'; data[2] = 'X'; data[3] = 'E';
+    data[4] = RUNA_PROTOCOL_VERSION; data[5] = RUNA_IR_VERSION_V2;
+    runa_write_u16_le(data + 6u, RUNA_HEADER_SIZE);
+    runa_write_u32_le(data + 8u, 0xabc00000u + module_count);
+    for (i = 0u; i < module_count; ++i) {
+        data[offset] = RUNA_OP_EXT; data[offset + 1u] = 3u;
+        runa_write_u16_le(data + offset + 2u, module_ids[i]);
+        data[offset + 4u] = 1u;
+        offset += 5u;
+    }
+    data[offset] = RUNA_OP_RETURN; data[offset + 1u] = 1u; data[offset + 2u] = 1u;
+    offset += 3u;
+    runa_write_u32_le(data + 12u, (uint32_t)offset);
+    runa_write_u32_le(data + 16u, (uint32_t)(offset - RUNA_HEADER_SIZE));
+    runa_write_u16_le(data + 20u, (uint16_t)(module_count + 1u));
+    runa_write_u32_le(data + 24u, RUNA_MAX_STEPS);
+    runa_write_u32_le(data + 28u, RUNA_MAX_RUNTIME_US);
+    runa_write_u16_le(data + 32u, RUNA_MAX_RESULT_BYTES);
+    runa_write_u16_le(data + 34u, RUNA_MAX_EMITS);
+    runa_write_u32_le(data + 36u, RUNA_MAX_EMIT_BYTES);
+    return offset;
+}
+
+static uint64_t verification_time(void *context) {
+    return *(const uint64_t *)context;
+}
+
+static runa_status_t verification_delay(void *context, uint32_t milliseconds) {
+    *(uint64_t *)context += (uint64_t)milliseconds * 1000u;
+    return RUNA_OK;
+}
+
+static void cross_module_family(verify_prng_t *prng) {
+    runa_module_t modules[14];
+    composition_context_t contexts[14];
+    runa_module_registry_t registry;
+    runa_resource_table_t resources = { NULL, 0u };
+    uint8_t data[RUNA_MAX_JOB_BYTES];
+    uint16_t selected[8];
+    uint32_t i;
+    for (i = 0u; i < 14u; ++i) {
+        memset(&contexts[i], 0, sizeof contexts[i]);
+        contexts[i].index = (uint8_t)i;
+        memset(&modules[i], 0, sizeof modules[i]);
+        modules[i].module_id = (uint16_t)(i + 1u);
+        modules[i].abi_version = RUNA_MODULE_ABI_VERSION;
+        modules[i].validate = composition_validate;
+        modules[i].execute = composition_execute;
+        modules[i].begin = composition_begin;
+        modules[i].end = composition_end;
+        modules[i].validate_resource = synthetic_resource;
+        modules[i].context = &contexts[i];
+    }
+    for (i = 0u; i < 10000u; ++i) {
+        runa_platform_t platform;
+        runa_event_sink_t sink;
+        runa_execution_summary_t summary;
+        verify_sink_t events = { 0 };
+        uint64_t now = 0u;
+        uint8_t count = (uint8_t)(2u + next_u32(prng) % 7u);
+        uint32_t j;
+        runa_registry_init(&registry);
+        for (j = 0u; j < 14u; ++j) {
+            contexts[j].begins = contexts[j].ends = contexts[j].executes = 0u;
+            (void)runa_registry_add(&registry, &modules[j]);
+        }
+        for (j = 0u; j < count; ++j) selected[j] = (uint16_t)(1u + ((i + j * 5u) % 14u));
+        /* Make the selected IDs unique for every generated case. */
+        for (j = 1u; j < count; ++j) if (selected[j] == selected[0]) selected[j] = (uint16_t)(j + 1u);
+        platform.context = &now; platform.time_us = verification_time; platform.delay_ms = verification_delay;
+        sink.send = capture; sink.context = &events;
+        summary = runa_process(data, make_composition_job(data, selected, count),
+                               &resources, &registry, &platform, &sink);
+        ++g_stats.cases;
+        CHECK_EQ("cross-module", i, RUNA_OK, summary.error);
+        CHECK_EQ("cross-module", i, 1u, summary.accepted);
+        CHECK_EQ("cross-module", i, 2u, events.count);
+        hash_u32(summary.error);
+        hash_u32(summary.steps);
+        hash_u32(summary.emit_count);
+        hash_u32(summary.emit_bytes);
+        hash_u32(summary.accepted);
+        hash_u32(summary.result_sent);
+        hash_bytes(events.bytes, sizeof events.bytes);
+        for (j = 0u; j < 14u; ++j) {
+            uint32_t expected = 0u;
+            uint32_t k;
+            for (k = 0u; k < count; ++k) if (selected[k] == j + 1u) expected = 1u;
+            CHECK_EQ("cross-module", i, expected, contexts[j].executes);
+            CHECK_EQ("cross-module", i, expected, contexts[j].begins);
+            CHECK_EQ("cross-module", i, expected, contexts[j].ends);
+        }
+    }
+}
+
+static void metamorphic_family(verify_prng_t *prng) {
+    uint32_t i;
+    for (i = 0u; i < 5000u; ++i) {
+        test_job_t original;
+        test_job_t transformed;
+        job_mock_hal_t hal_a;
+        job_mock_hal_t hal_b;
+        verify_sink_t sink_a = { 0 };
+        verify_sink_t sink_b = { 0 };
+        const uint32_t value = next_u32(prng);
+        test_job_init(&original, 0x50000000u + i);
+        test_load(&original, 1u, value);
+        test_return(&original, 2u);
+        test_job_init(&transformed, 0x50000000u + i);
+        test_load(&transformed, 1u, value);
+        test_return(&transformed, 2u);
+        test_job_ins(&transformed, JOB_OP_NOP, NULL, 0u);
+        job_mock_hal_init(&hal_a); job_mock_hal_init(&hal_b);
+        CHECK_EQ("metamorphic", i, JOB_OK, run_job(&original, &hal_a, &sink_a).error);
+        CHECK_EQ("metamorphic", i, JOB_OK, run_job(&transformed, &hal_b, &sink_b).error);
+        ++g_stats.cases;
+        CHECK_TRUE("metamorphic", i, memcmp(&sink_a, &sink_b, sizeof sink_a) == 0);
+        hash_bytes(&sink_a, sizeof sink_a);
+    }
+}
+
+static void capability_mutation_family(void) {
+    runa_module_t module = runa_gpio_module(NULL);
+    runa_module_registry_t registry;
+    uint8_t encoded[RUNA_MAX_CAPABILITY_BYTES];
+    uint8_t mutated[RUNA_MAX_CAPABILITY_BYTES];
+    size_t written;
+    runa_capabilities_view_t view;
+    uint32_t i;
+    runa_registry_init(&registry);
+    (void)runa_registry_add(&registry, &module);
+    (void)runa_capabilities_encode(&registry, encoded, sizeof encoded, &written);
+    for (i = 0u; i < 10000u; ++i) {
+        size_t size = written;
+        memcpy(mutated, encoded, written);
+        switch (i % 6u) {
+        case 0u: size = i % (written + 1u); break;
+        case 1u: mutated[i % written] ^= (uint8_t)(1u << (i % 8u)); break;
+        case 2u: runa_write_u16_le(mutated + 4u, (uint16_t)(written + i)); break;
+        case 3u: mutated[6u] = 99u; break;
+        case 4u: mutated[32u] = 0u; mutated[33u] = 0u; break;
+        default: mutated[31u] = (uint8_t)i; break;
+        }
+        ++g_stats.cases;
+        (void)runa_capabilities_decode(mutated, size, &view);
+    }
+}
+
+typedef struct gpio_side_effect_state { uint32_t writes; } gpio_side_effect_state_t;
+
+static runa_status_t verification_gpio_write(void *context, uintptr_t handle, uint32_t value) {
+    gpio_side_effect_state_t *state = (gpio_side_effect_state_t *)context;
+    (void)handle; (void)value;
+    ++state->writes;
+    return RUNA_OK;
+}
+
+static void side_effect_family(verify_prng_t *prng) {
+    runa_gpio_hal_t hal = { 0 };
+    runa_module_t module;
+    runa_module_registry_t registry;
+    runa_resource_t resource = { 1u, RUNA_GPIO_MODULE_ID, RUNA_GPIO_RESOURCE_TYPE, 0u,
+                                 RUNA_PERMISSION_WRITE, 17u, NULL };
+    runa_resource_table_t resources = { &resource, 1u };
+    uint8_t data[RUNA_MAX_JOB_BYTES];
+    uint32_t i;
+    gpio_side_effect_state_t state = { 0u };
+    hal.context = &state; hal.write = verification_gpio_write;
+    module = runa_gpio_module(&hal);
+    runa_registry_init(&registry);
+    (void)runa_registry_add(&registry, &module);
+    for (i = 0u; i < 10000u; ++i) {
+        size_t offset = RUNA_HEADER_SIZE;
+        uint64_t now = 0u;
+        runa_platform_t platform = { &now, verification_time, verification_delay };
+        verify_sink_t events = { 0 };
+        runa_event_sink_t sink = { capture, &events };
+        data[offset++] = RUNA_OP_LOAD_CONST; data[offset++] = 5u; data[offset++] = 0u;
+        runa_write_u32_le(data + offset, next_u32(prng) & 1u); offset += 4u;
+        data[offset++] = RUNA_OP_EXT; data[offset++] = 3u; runa_write_u16_le(data + offset, 1u);
+        data[offset + 2u] = RUNA_GPIO_OP_WRITE; offset += 3u;
+        data[offset++] = RUNA_OP_EXT; data[offset++] = 3u; runa_write_u16_le(data + offset, 99u);
+        data[offset + 2u] = 255u; offset += 3u;
+        data[offset++] = RUNA_OP_RETURN; data[offset++] = 1u; data[offset++] = 1u;
+        memset(data, 0, RUNA_HEADER_SIZE);
+        data[0] = 'J'; data[1] = 'E'; data[2] = 'X'; data[3] = 'E';
+        data[4] = RUNA_PROTOCOL_VERSION; data[5] = RUNA_IR_VERSION_V2;
+        runa_write_u16_le(data + 6u, RUNA_HEADER_SIZE); runa_write_u32_le(data + 8u, i);
+        runa_write_u32_le(data + 12u, (uint32_t)offset); runa_write_u32_le(data + 16u, (uint32_t)(offset - RUNA_HEADER_SIZE));
+        runa_write_u16_le(data + 20u, 4u); runa_write_u32_le(data + 24u, RUNA_MAX_STEPS);
+        runa_write_u32_le(data + 28u, RUNA_MAX_RUNTIME_US); runa_write_u16_le(data + 32u, RUNA_MAX_RESULT_BYTES);
+        runa_write_u16_le(data + 34u, RUNA_MAX_EMITS); runa_write_u32_le(data + 36u, RUNA_MAX_EMIT_BYTES);
+        (void)runa_process(data, offset, &resources, &registry, &platform, &sink);
+        ++g_stats.cases;
+        CHECK_EQ("side-effect", i, 0u, state.writes);
+    }
+}
+
 int main(void) {
     verify_prng_t prng = { UINT64_C(0x9e3779b97f4a7c15) };
     g_stats.family = "campaign";
@@ -625,8 +888,13 @@ int main(void) {
     validation_matrix_family();
     lifecycle_family();
     block_model_family(&prng);
+    cross_module_family(&prng);
+    side_effect_family(&prng);
+    metamorphic_family(&prng);
+    capability_mutation_family();
     printf("verification cases=%" PRIu64 " assertions=%" PRIu64
-           " failures=%" PRIu64 " seed=0x%016" PRIx64 "\n",
-           g_stats.cases, g_stats.assertions, g_stats.failures, g_stats.seed);
+           " failures=%" PRIu64 " seed=0x%016" PRIx64
+           " result_hash=0x%016" PRIx64 "\n",
+           g_stats.cases, g_stats.assertions, g_stats.failures, g_stats.seed, g_result_hash);
     return g_stats.failures == 0u ? 0 : 1;
 }
