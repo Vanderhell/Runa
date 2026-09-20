@@ -78,12 +78,17 @@ static void check_value(int condition, const char *expression, uint64_t case_id,
     }
 }
 
-#define CHECK_EQ(family, case_id, expected, actual) \
-    check_value((expected) == (actual), #actual, (case_id), (family), \
-                (uint32_t)(expected), (uint32_t)(actual))
-#define CHECK_TRUE(family, case_id, expression) \
-    check_value((expression) != 0, #expression, (case_id), (family), 1u, \
-                (uint32_t)((expression) != 0))
+#define CHECK_EQ(family, case_id, expected, actual) do { \
+    const uint32_t expected_value = (uint32_t)(expected); \
+    const uint32_t actual_value = (uint32_t)(actual); \
+    check_value(expected_value == actual_value, #actual, (case_id), (family), \
+                expected_value, actual_value); \
+} while (0)
+#define CHECK_TRUE(family, case_id, expression) do { \
+    const int expression_value = ((expression) != 0); \
+    check_value(expression_value != 0, #expression, (case_id), (family), 1u, \
+                (uint32_t)expression_value); \
+} while (0)
 
 static int capture(void *context, const uint8_t *data, size_t size) {
     verify_sink_t *sink = (verify_sink_t *)context;
@@ -294,6 +299,104 @@ static void capability_family(void) {
     }
 }
 
+static runa_status_t synthetic_validate(void *context, const runa_module_job_t *job,
+                                        const runa_module_instruction_t *instruction,
+                                        uint32_t *detail) {
+    (void)context; (void)job; (void)instruction; (void)detail;
+    return RUNA_OK;
+}
+
+static runa_status_t synthetic_execute(void *context, runa_module_job_t *job,
+                                       const runa_module_instruction_t *instruction,
+                                       uint32_t *detail) {
+    (void)context; (void)job; (void)instruction; (void)detail;
+    return RUNA_OK;
+}
+
+static runa_status_t synthetic_resource(void *context, const runa_resource_t *resource,
+                                        uint32_t *detail) {
+    (void)context; (void)detail;
+    return resource != NULL && resource->resource_type == 7u ? RUNA_OK : RUNA_ERR_RESOURCE_TYPE;
+}
+
+static void registry_resource_family(verify_prng_t *prng) {
+    runa_module_t modules[RUNA_MAX_MODULES + 1u];
+    runa_module_registry_t registry;
+    runa_resource_t resources[4];
+    uint32_t i;
+    for (i = 0u; i <= RUNA_MAX_MODULES; ++i) {
+        memset(&modules[i], 0, sizeof modules[i]);
+        modules[i].module_id = (uint16_t)(100u + i);
+        modules[i].abi_version = RUNA_MODULE_ABI_VERSION;
+        modules[i].validate = synthetic_validate;
+        modules[i].execute = synthetic_execute;
+        modules[i].validate_resource = synthetic_resource;
+    }
+    for (i = 0u; i <= RUNA_MAX_MODULES + 1u; ++i) {
+        runa_registry_init(&registry);
+        {
+            uint32_t count;
+            const uint32_t wanted = i;
+            for (count = 0u; count < wanted && count < RUNA_MAX_MODULES; ++count)
+                CHECK_EQ("registry-capacity", i, RUNA_OK,
+                         runa_registry_add(&registry, &modules[count]));
+            if (wanted == RUNA_MAX_MODULES + 1u) {
+                CHECK_EQ("registry-capacity", i, RUNA_ERR_OUT_OF_RANGE,
+                         runa_registry_add(&registry, &modules[RUNA_MAX_MODULES]));
+            }
+            ++g_stats.cases;
+            CHECK_EQ("registry-capacity", i, wanted <= RUNA_MAX_MODULES ? wanted : RUNA_MAX_MODULES,
+                     registry.count);
+        }
+    }
+    runa_registry_init(&registry);
+    CHECK_EQ("registry-duplicate", 0u, RUNA_OK, runa_registry_add(&registry, &modules[0]));
+    CHECK_EQ("registry-duplicate", 1u, RUNA_ERR_INVALID_FORMAT,
+             runa_registry_add(&registry, &modules[0]));
+    modules[1].abi_version = 99u;
+    CHECK_EQ("registry-abi", 2u, RUNA_ERR_INVALID_FORMAT,
+             runa_registry_add(&registry, &modules[1]));
+    modules[1].abi_version = RUNA_MODULE_ABI_VERSION;
+    modules[1].validate = NULL;
+    CHECK_EQ("registry-callback", 3u, RUNA_ERR_INVALID_FORMAT,
+             runa_registry_add(&registry, &modules[1]));
+    modules[1].validate = synthetic_validate;
+
+    for (i = 0u; i < 4000u; ++i) {
+        const uint32_t random_id = next_u32(prng) & 3u;
+        const uint32_t random_permissions = next_u32(prng) & 7u;
+        const uint32_t random_type = next_u32(prng) & 7u;
+        resources[0].id = (uint16_t)random_id;
+        resources[0].module_id = 100u;
+        resources[0].resource_type = (uint16_t)random_type;
+        resources[0].reserved = 0u;
+        resources[0].permissions = random_permissions;
+        resources[0].platform_handle = 0u;
+        resources[0].config = NULL;
+        {
+            runa_resource_table_t table = { resources, 1u };
+            const runa_status_t actual = runa_resource_table_validate(&table, &registry);
+            const int valid = random_type == 7u && (random_permissions & ~3u) == 0u;
+            const runa_status_t expected = valid ? RUNA_OK :
+                ((random_permissions & ~3u) != 0u ? RUNA_ERR_INVALID_RESOURCE :
+                 RUNA_ERR_RESOURCE_TYPE);
+            ++g_stats.cases;
+            CHECK_EQ("resource-matrix", i, expected, actual);
+        }
+    }
+    resources[0].id = 1u; resources[1] = resources[0]; resources[1].id = 1u;
+    {
+        runa_resource_table_t table = { resources, 2u };
+        CHECK_EQ("resource-duplicate", 0u, RUNA_ERR_INVALID_RESOURCE,
+                 runa_resource_table_validate(&table, &registry));
+    }
+    {
+        runa_resource_table_t table = { resources, RUNA_MAX_RESOURCES + 1u };
+        CHECK_EQ("resource-capacity", 0u, RUNA_ERR_INVALID_FORMAT,
+                 runa_resource_table_validate(&table, &registry));
+    }
+}
+
 int main(void) {
     verify_prng_t prng = { UINT64_C(0x9e3779b97f4a7c15) };
     g_stats.family = "campaign";
@@ -303,6 +406,7 @@ int main(void) {
     header_boundary_family();
     deterministic_replay_and_soak();
     capability_family();
+    registry_resource_family(&prng);
     printf("verification cases=%" PRIu64 " assertions=%" PRIu64
            " failures=%" PRIu64 " seed=0x%016" PRIx64 "\n",
            g_stats.cases, g_stats.assertions, g_stats.failures, g_stats.seed);
