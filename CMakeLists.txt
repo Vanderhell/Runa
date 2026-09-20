@@ -394,6 +394,24 @@ if(JOB_BUILD_FUZZ)
     else()
         target_compile_options(runa_capabilities_fuzz PRIVATE -Wall -Wextra -Wpedantic -Wconversion -Wshadow -Werror)
     endif()
+    if(RUNA_MODULE_GPIO AND RUNA_MODULE_ADC AND RUNA_MODULE_PWM AND RUNA_MODULE_SPI AND
+       RUNA_MODULE_I2C AND RUNA_MODULE_UART AND RUNA_MODULE_CAN AND RUNA_MODULE_PULSE AND
+       RUNA_MODULE_DAC AND RUNA_MODULE_ENCODER AND RUNA_MODULE_ONEWIRE AND
+       RUNA_MODULE_BLOCK_DEVICE AND RUNA_MODULE_RTC AND RUNA_MODULE_WATCHDOG)
+        add_executable(runa_modules_fuzz fuzz/runa_modules_fuzz.c)
+        target_link_libraries(runa_modules_fuzz PRIVATE job_engine)
+        target_include_directories(runa_modules_fuzz PRIVATE
+            modules/gpio/include modules/adc/include modules/pwm/include
+            modules/spi/include modules/i2c/include modules/uart/include
+            modules/can/include modules/pulse/include modules/dac/include
+            modules/encoder/include modules/onewire/include modules/block_device/include
+            modules/rtc/include modules/watchdog/include)
+        if(MSVC)
+            target_compile_options(runa_modules_fuzz PRIVATE /W4 /WX /permissive-)
+        else()
+            target_compile_options(runa_modules_fuzz PRIVATE -Wall -Wextra -Wpedantic -Wconversion -Wshadow -Werror)
+        endif()
+    endif()
     if(RUNA_MODULE_DAC)
         add_executable(runa_dac_fuzz fuzz/runa_dac_fuzz.c)
         target_link_libraries(runa_dac_fuzz PRIVATE runa_core runa_dac)
