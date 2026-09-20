@@ -6,3 +6,4 @@
 /platform/esp32/sdkconfig
 *.user
 *.suo
+/prompts
