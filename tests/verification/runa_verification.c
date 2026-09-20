@@ -510,6 +510,7 @@ static void lifecycle_family(void) {
     for (failure = 0u; failure < 8u; ++failure) {
         runa_status_t status;
         runa_registry_init(&registry);
+        g_lifecycle_count = 0u;
         for (i = 0u; i < 8u; ++i) {
             states[i].fail_at = (uint8_t)failure;
             states[i].begins = 0u;
