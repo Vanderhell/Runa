@@ -83,6 +83,20 @@ static size_t make_job(uint8_t *job, uint8_t operation, uint32_t id, uint8_t len
     return RUNA_HEADER_SIZE + instruction_bytes;
 }
 
+static size_t make_adversarial_job(uint8_t *job) {
+    size_t size = make_job(job, RUNA_CAN_OP_TRANSMIT, 0x100u, 2u);
+    size_t invalid_offset = size - 3u;
+    memmove(job + invalid_offset + 5u, job + invalid_offset, 3u);
+    job[invalid_offset] = RUNA_OP_EXT;
+    job[invalid_offset + 1u] = 3u;
+    runa_write_u16_le(job + invalid_offset + 2u, RUNA_CAN_MODULE_ID);
+    job[invalid_offset + 4u] = 99u;
+    runa_write_u32_le(job + 12u, (uint32_t)(size + 5u));
+    runa_write_u32_le(job + 16u, (uint32_t)(size + 5u - RUNA_HEADER_SIZE));
+    runa_write_u16_le(job + 20u, 3u);
+    return size + 5u;
+}
+
 static int invalid_job(fixture_t *state, const runa_resource_table_t *resources,
                        const runa_module_registry_t *registry, const uint8_t *job, size_t size,
                        runa_status_t expected) {
@@ -147,6 +161,12 @@ int main(void) {
                            &resources, &registry, &platform, &sink);
     if (result.error != RUNA_ERR_IO_TIMEOUT || state.receive_calls != 1u || state.event_count != 2u ||
         state.events[0][0] != RUNA_EVENT_ACK || state.events[1][0] != RUNA_EVENT_RESULT) return 7;
+    resource.permissions = RUNA_PERMISSION_READ | RUNA_PERMISSION_WRITE;
+    for (unsigned case_index = 0u; case_index < 1000u; ++case_index) {
+        memset(&state, 0, sizeof state);
+        result = runa_process(job, make_adversarial_job(job), &resources, &registry, &platform, &sink);
+        if (result.error == RUNA_OK || state.transmit_calls != 0u || state.receive_calls != 0u) return 8;
+    }
     puts("Runa.CAN bounded frame checks passed");
     return 0;
 }

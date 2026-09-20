@@ -61,6 +61,21 @@ static size_t make_job(uint8_t *job, uint8_t operation, uint16_t resource_id,
     return RUNA_HEADER_SIZE + instruction_bytes;
 }
 
+static size_t make_adversarial_job(uint8_t *job) {
+    size_t size = make_job(job, RUNA_PULSE_OP_COUNT, 8u, RUNA_PULSE_EDGE_RISING,
+                           100u, 100u, 0u);
+    size_t invalid_offset = size - 3u;
+    memmove(job + invalid_offset + 5u, job + invalid_offset, 3u);
+    job[invalid_offset] = RUNA_OP_EXT;
+    job[invalid_offset + 1u] = 3u;
+    runa_write_u16_le(job + invalid_offset + 2u, RUNA_PULSE_MODULE_ID);
+    job[invalid_offset + 4u] = 99u;
+    runa_write_u32_le(job + 12u, (uint32_t)(size + 5u));
+    runa_write_u32_le(job + 16u, (uint32_t)(size + 5u - RUNA_HEADER_SIZE));
+    runa_write_u16_le(job + 20u, 3u);
+    return size + 5u;
+}
+
 static int expect_error(fixture_t *fixture, runa_pulse_mock_state_t *mock,
                         const runa_resource_table_t *resources,
                         const runa_module_registry_t *registry, const uint8_t *job,
@@ -165,6 +180,14 @@ int main(void) {
                           &resources, &registry, &platform, &sink);
     if (result.error != RUNA_OK || fixture.event_count != 2u || mock.count_calls != 2u) {
         return 10;
+    }
+
+    for (unsigned case_index = 0u; case_index < 1000u; ++case_index) {
+        memset(&fixture, 0, sizeof fixture);
+        memset(&mock, 0, sizeof mock);
+        result = runa_process(job, make_adversarial_job(job), &resources, &registry, &platform, &sink);
+        if (result.error == RUNA_OK || mock.count_calls != 0u || mock.width_calls != 0u ||
+            mock.period_calls != 0u) return 11;
     }
 
     puts("Runa.Pulse bounded measurement checks passed");
