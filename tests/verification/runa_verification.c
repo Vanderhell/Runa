@@ -17,6 +17,7 @@
 #include "runa_block_device.h"
 #include "runa_rtc.h"
 #include "runa_watchdog.h"
+#include "runa_block_device_mock_hal.h"
 #include "runa_validator.h"
 #include "runa_ir.h"
 #include "runa_limits.h"
@@ -540,6 +541,77 @@ static void lifecycle_family(void) {
         CHECK_EQ("lifecycle-order", i, 7u - i, g_lifecycle_order[i]);
 }
 
+static runa_status_t verification_module_data(void *context, uint16_t module_id,
+                                               uint16_t instruction_index, uint16_t sequence,
+                                               const uint8_t *data, size_t size) {
+    uint32_t *count = (uint32_t *)context;
+    (void)module_id; (void)instruction_index; (void)sequence; (void)data; (void)size;
+    ++*count;
+    return RUNA_OK;
+}
+
+static void block_model_family(verify_prng_t *prng) {
+    uint8_t storage[256];
+    uint8_t reference[256];
+    runa_block_device_mock_t mock;
+    runa_block_device_hal_t hal;
+    runa_block_device_resource_config_t config = {
+        256u, 1u, 1u, 1u, 192u, 192u, 192u,
+        0xffu, (uint8_t)(RUNA_BLOCK_CAP_READ | RUNA_BLOCK_CAP_WRITE |
+                         RUNA_BLOCK_CAP_ERASE | RUNA_BLOCK_CAP_SYNC), 0u, 0u
+    };
+    runa_resource_t resource = { 1u, RUNA_BLOCK_DEVICE_MODULE_ID,
+                                 RUNA_BLOCK_DEVICE_RESOURCE_TYPE, 0u,
+                                 RUNA_PERMISSION_READ | RUNA_PERMISSION_WRITE,
+                                 9u, &config };
+    runa_resource_table_t resources = { &resource, 1u };
+    runa_module_job_t job = { 0 };
+    runa_module_t module;
+    uint32_t data_count = 0u;
+    uint32_t i;
+    runa_block_device_mock_init(&mock, storage, sizeof storage, sizeof storage, 0xffu);
+    memcpy(reference, storage, sizeof reference);
+    hal = runa_block_device_mock_hal(&mock);
+    module = runa_block_device_module(&hal);
+    job.resources = &resources;
+    job.max_result_bytes = RUNA_MAX_RESULT_BYTES;
+    job.emit_data = verification_module_data;
+    job.emit_context = &data_count;
+    for (i = 0u; i < 5000u; ++i) {
+        uint8_t operands[202] = { 0u };
+        runa_module_instruction_t instruction = { RUNA_BLOCK_DEVICE_MODULE_ID,
+                                                   0u, 0u, operands, 0u, 0u };
+        const uint32_t offset = next_u32(prng) % 256u;
+        const uint32_t length = 1u + next_u32(prng) % 32u;
+        const uint8_t operation = (uint8_t)(1u + next_u32(prng) % 3u);
+        uint32_t detail = 0u;
+        uint32_t k;
+        instruction.operation = operation;
+        instruction.operand_size = 10u;
+        runa_write_u16_le(operands, 1u);
+        runa_write_u32_le(operands + 2u, offset);
+        runa_write_u32_le(operands + 6u, length);
+        for (k = 0u; k < length; ++k) operands[10u + k] = (uint8_t)(i + k);
+        if (operation == RUNA_BLOCK_DEVICE_OP_WRITE) instruction.operand_size = (uint8_t)(10u + length);
+        ++g_stats.cases;
+        {
+            const runa_status_t status = module.validate(module.context, &job, &instruction, &detail);
+            const int in_range = offset < 256u && length <= 256u - offset;
+            CHECK_EQ("block-model", i, in_range ? RUNA_OK : RUNA_ERR_OUT_OF_RANGE, status);
+            if (status == RUNA_OK) {
+                CHECK_EQ("block-model", i, RUNA_OK,
+                         module.execute(module.context, &job, &instruction, &detail));
+                if (operation == RUNA_BLOCK_DEVICE_OP_WRITE) {
+                    memcpy(reference + offset, operands + 10u, length);
+                } else if (operation == RUNA_BLOCK_DEVICE_OP_ERASE) {
+                    memset(reference + offset, 0xff, length);
+                }
+                CHECK_TRUE("block-model", i, memcmp(storage, reference, sizeof storage) == 0);
+            }
+        }
+    }
+}
+
 int main(void) {
     verify_prng_t prng = { UINT64_C(0x9e3779b97f4a7c15) };
     g_stats.family = "campaign";
@@ -552,6 +624,7 @@ int main(void) {
     registry_resource_family(&prng);
     validation_matrix_family();
     lifecycle_family();
+    block_model_family(&prng);
     printf("verification cases=%" PRIu64 " assertions=%" PRIu64
            " failures=%" PRIu64 " seed=0x%016" PRIx64 "\n",
            g_stats.cases, g_stats.assertions, g_stats.failures, g_stats.seed);

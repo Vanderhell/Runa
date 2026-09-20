@@ -218,7 +218,8 @@ if(RUNA_BUILD_EXHAUSTIVE_TESTS AND RUNA_MODULE_GPIO AND RUNA_MODULE_ADC AND RUNA
    AND RUNA_MODULE_SPI AND RUNA_MODULE_I2C AND RUNA_MODULE_UART AND RUNA_MODULE_CAN
    AND RUNA_MODULE_PULSE AND RUNA_MODULE_DAC AND RUNA_MODULE_ENCODER AND RUNA_MODULE_ONEWIRE
    AND RUNA_MODULE_BLOCK_DEVICE AND RUNA_MODULE_RTC AND RUNA_MODULE_WATCHDOG)
-    add_executable(runa_verification tests/verification/runa_verification.c tests/test_builder.c)
+    add_executable(runa_verification tests/verification/runa_verification.c tests/test_builder.c
+        platform/mock/runa_block_device_mock_hal.c)
     target_include_directories(runa_verification PRIVATE
         include core/include tests modules/gpio/include modules/adc/include modules/pwm/include
         modules/spi/include modules/i2c/include modules/uart/include modules/can/include
