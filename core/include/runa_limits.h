@@ -2,7 +2,10 @@
 #define RUNA_LIMITS_H
 
 #define RUNA_PROTOCOL_VERSION 1u
-#define RUNA_IR_VERSION 1u
+/* Legacy scalar IR version. Modular jobs use RUNA_IR_VERSION_V2 from
+ * runa_ir.h; keep this alias for V1 host/compatibility code. */
+#define RUNA_IR_VERSION_LEGACY 1u
+#define RUNA_IR_VERSION RUNA_IR_VERSION_LEGACY
 #define RUNA_REGISTER_COUNT 8u
 #define RUNA_MAX_JOB_BYTES 2048u
 #define RUNA_MAX_INSTRUCTIONS 256u

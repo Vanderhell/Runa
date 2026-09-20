@@ -24,6 +24,9 @@ enum {
     RUNA_ERR_RUNTIME_LIMIT = 15,
     RUNA_ERR_RESULT_LIMIT = 16,
     RUNA_ERR_EMIT_LIMIT = 17,
+    /* Values at and above MODULE_BASE are module-local status domains. The
+     * module ID and operation identify their meaning; do not compare these
+     * values globally across modules. */
     RUNA_ERR_MODULE_BASE = 18,
     RUNA_ERR_IO_TIMEOUT = 21,
     RUNA_ERR_CANCELLED = 22,

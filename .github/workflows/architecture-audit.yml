@@ -1,0 +1,71 @@
+name: architecture-audit
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  windows-msvc:
+    runs-on: windows-latest
+    strategy:
+      matrix:
+        configuration: [Debug, Release]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 9.x
+      - name: Configure
+        run: cmake -S . -B build -A x64 -DJOB_BUILD_TESTS=ON -DJOB_BUILD_FUZZ=ON -DRUNA_MODULE_SPI=ON -DRUNA_MODULE_I2C=ON -DRUNA_MODULE_UART=ON -DRUNA_MODULE_CAN=ON -DRUNA_MODULE_PULSE=ON -DRUNA_MODULE_DAC=ON -DRUNA_MODULE_ENCODER=ON -DRUNA_MODULE_ONEWIRE=ON -DRUNA_MODULE_BLOCK_DEVICE=ON -DRUNA_MODULE_RTC=ON -DRUNA_MODULE_WATCHDOG=ON
+      - name: Build
+        run: cmake --build build --config ${{ matrix.configuration }} --parallel
+      - name: Native tests
+        run: ctest --test-dir build -C ${{ matrix.configuration }} --output-on-failure
+      - name: Host conformance
+        run: dotnet run --project host/dotnet/McuRemote.Tests/McuRemote.Tests.csproj --configuration Release
+
+  linux-strict:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        compiler: [gcc, clang]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 9.x
+      - name: Configure
+        env:
+          CC: ${{ matrix.compiler }}
+        run: cmake -S . -B build -G Ninja -DJOB_BUILD_TESTS=ON -DJOB_BUILD_FUZZ=ON -DRUNA_MODULE_SPI=ON -DRUNA_MODULE_I2C=ON -DRUNA_MODULE_UART=ON -DRUNA_MODULE_CAN=ON -DRUNA_MODULE_PULSE=ON -DRUNA_MODULE_DAC=ON -DRUNA_MODULE_ENCODER=ON -DRUNA_MODULE_ONEWIRE=ON -DRUNA_MODULE_BLOCK_DEVICE=ON -DRUNA_MODULE_RTC=ON -DRUNA_MODULE_WATCHDOG=ON
+      - name: Build
+        run: cmake --build build --parallel
+      - name: CTest
+        run: ctest --test-dir build --output-on-failure
+      - name: Host conformance
+        run: dotnet run --project host/dotnet/McuRemote.Tests/McuRemote.Tests.csproj --configuration Release
+
+  linux-sanitizers:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure
+        env:
+          CC: clang
+        run: cmake -S . -B build -G Ninja -DJOB_ENABLE_SANITIZERS=ON -DJOB_BUILD_TESTS=ON -DJOB_BUILD_FUZZ=ON -DRUNA_MODULE_SPI=ON -DRUNA_MODULE_I2C=ON -DRUNA_MODULE_UART=ON -DRUNA_MODULE_CAN=ON -DRUNA_MODULE_PULSE=ON -DRUNA_MODULE_DAC=ON -DRUNA_MODULE_ENCODER=ON -DRUNA_MODULE_ONEWIRE=ON -DRUNA_MODULE_BLOCK_DEVICE=ON -DRUNA_MODULE_RTC=ON -DRUNA_MODULE_WATCHDOG=ON
+      - name: Build
+        run: cmake --build build --parallel
+      - name: Sanitized CTest
+        run: ctest --test-dir build --output-on-failure
+
+  dotnet:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 9.x
+      - name: Build host packages
+        run: dotnet build host/dotnet/McuRemote/McuRemote.csproj --configuration Release --warnaserror
+      - name: Golden-vector tests
+        run: dotnet run --project host/dotnet/McuRemote.Tests/McuRemote.Tests.csproj --configuration Release
