@@ -406,11 +406,11 @@ if(BUILD_TESTING AND JOB_BUILD_TESTS)
     find_program(DOTNET_EXECUTABLE dotnet)
     if(DOTNET_EXECUTABLE)
         add_test(NAME host_and_cross_language
-            COMMAND ${DOTNET_EXECUTABLE} run --project ${CMAKE_CURRENT_SOURCE_DIR}/host/dotnet/McuRemote.Tests/McuRemote.Tests.csproj -- $<TARGET_FILE:job_conformance>
+            COMMAND ${DOTNET_EXECUTABLE} run --no-restore --project ${CMAKE_CURRENT_SOURCE_DIR}/host/dotnet/McuRemote.Tests/McuRemote.Tests.csproj -- $<TARGET_FILE:job_conformance>
             WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/host/dotnet)
         if(RUNA_MODULE_RTC)
             add_test(NAME host_rtc_validation
-                COMMAND ${DOTNET_EXECUTABLE} run --project ${CMAKE_CURRENT_SOURCE_DIR}/host/dotnet/RtcValidation/RtcValidation.csproj
+                COMMAND ${DOTNET_EXECUTABLE} run --no-restore --project ${CMAKE_CURRENT_SOURCE_DIR}/host/dotnet/RtcValidation/RtcValidation.csproj
                 WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/host/dotnet)
         endif()
     endif()
