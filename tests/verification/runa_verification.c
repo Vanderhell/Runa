@@ -638,6 +638,7 @@ typedef struct composition_context {
     uint32_t executes;
     uint32_t selected;
     uint8_t index;
+    uint8_t fail_on;
 } composition_context_t;
 
 static runa_status_t composition_begin(void *context, const runa_module_job_t *job) {
@@ -669,6 +670,7 @@ static runa_status_t composition_execute(void *context, runa_module_job_t *job,
     composition_context_t *state = (composition_context_t *)context;
     (void)job; (void)instruction; (void)detail;
     ++state->executes;
+    if (state->fail_on == state->index) return RUNA_ERR_INTERNAL;
     return RUNA_OK;
 }
 
@@ -720,6 +722,7 @@ static void cross_module_family(verify_prng_t *prng) {
     for (i = 0u; i < 14u; ++i) {
         memset(&contexts[i], 0, sizeof contexts[i]);
         contexts[i].index = (uint8_t)i;
+        contexts[i].fail_on = UINT8_MAX;
         memset(&modules[i], 0, sizeof modules[i]);
         modules[i].module_id = (uint16_t)(i + 1u);
         modules[i].abi_version = RUNA_MODULE_ABI_VERSION;
@@ -741,6 +744,7 @@ static void cross_module_family(verify_prng_t *prng) {
         runa_registry_init(&registry);
         for (j = 0u; j < 14u; ++j) {
             contexts[j].begins = contexts[j].ends = contexts[j].executes = 0u;
+            contexts[j].fail_on = UINT8_MAX;
             (void)runa_registry_add(&registry, &modules[j]);
         }
         for (j = 0u; j < count; ++j) selected[j] = (uint16_t)(1u + ((i + j * 5u) % 14u));
@@ -768,6 +772,67 @@ static void cross_module_family(verify_prng_t *prng) {
             CHECK_EQ("cross-module", i, expected, contexts[j].executes);
             CHECK_EQ("cross-module", i, expected, contexts[j].begins);
             CHECK_EQ("cross-module", i, expected, contexts[j].ends);
+        }
+    }
+}
+
+static void validation_and_fault_family(verify_prng_t *prng) {
+    runa_module_t modules[14];
+    composition_context_t contexts[14];
+    runa_module_registry_t registry;
+    runa_resource_table_t resources = { NULL, 0u };
+    uint8_t data[RUNA_MAX_JOB_BYTES];
+    uint16_t selected[8];
+    uint32_t i;
+    for (i = 0u; i < 14u; ++i) {
+        memset(&contexts[i], 0, sizeof contexts[i]);
+        contexts[i].index = (uint8_t)i;
+        contexts[i].fail_on = UINT8_MAX;
+        memset(&modules[i], 0, sizeof modules[i]);
+        modules[i].module_id = (uint16_t)(i + 1u);
+        modules[i].abi_version = RUNA_MODULE_ABI_VERSION;
+        modules[i].validate = composition_validate;
+        modules[i].execute = composition_execute;
+        modules[i].begin = composition_begin;
+        modules[i].end = composition_end;
+        modules[i].validate_resource = synthetic_resource;
+        modules[i].context = &contexts[i];
+    }
+    for (i = 0u; i < 5000u; ++i) {
+        uint8_t count = (uint8_t)(2u + next_u32(prng) % 7u);
+        uint32_t j;
+        runa_platform_t platform;
+        runa_event_sink_t sink;
+        verify_sink_t events = { 0 };
+        uint64_t now = 0u;
+        runa_execution_summary_t summary;
+        runa_registry_init(&registry);
+        for (j = 0u; j < 14u; ++j) {
+            contexts[j].begins = contexts[j].ends = contexts[j].executes = 0u;
+            contexts[j].fail_on = UINT8_MAX;
+            (void)runa_registry_add(&registry, &modules[j]);
+        }
+        for (j = 0u; j < count; ++j) selected[j] = (uint16_t)(1u + ((i + j * 3u) % 14u));
+        for (j = 1u; j < count; ++j) if (selected[j] == selected[0]) selected[j] = (uint16_t)(j + 1u);
+        platform.context = &now; platform.time_us = verification_time; platform.delay_ms = verification_delay;
+        sink.send = capture; sink.context = &events;
+        {
+            size_t size = make_composition_job(data, selected, count);
+            data[RUNA_HEADER_SIZE + 4u] = 255u;
+            summary = runa_process(data, size, &resources, &registry, &platform, &sink);
+        }
+        ++g_stats.cases;
+        CHECK_TRUE("validation-side-effect-all", i, summary.error != RUNA_OK);
+        for (j = 0u; j < 14u; ++j) CHECK_EQ("validation-side-effect-all", i, 0u, contexts[j].executes);
+        {
+            size_t size = make_composition_job(data, selected, count);
+            uint32_t fail_position = next_u32(prng) % count;
+            contexts[selected[fail_position] - 1u].fail_on = contexts[selected[fail_position] - 1u].index;
+            summary = runa_process(data, size, &resources, &registry, &platform, &sink);
+            ++g_stats.cases;
+            CHECK_EQ("fault-injection", i, RUNA_ERR_INTERNAL, summary.error);
+            for (j = fail_position + 1u; j < count; ++j)
+                CHECK_EQ("fault-injection", i, 0u, contexts[selected[j] - 1u].executes);
         }
     }
 }
@@ -1021,6 +1086,7 @@ int main(void) {
     block_model_family(&prng);
     cross_module_family(&prng);
     side_effect_family(&prng);
+    validation_and_fault_family(&prng);
     metamorphic_family(&prng);
     capability_mutation_family();
     state_model_family(&prng);
