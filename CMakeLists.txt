@@ -4,6 +4,7 @@ project(mcu_remote_execution_engine VERSION 0.1.0 LANGUAGES C)
 option(JOB_BUILD_TESTS "Build native tests" ON)
 option(JOB_BUILD_FUZZ "Build standalone fuzz driver" ON)
 option(JOB_ENABLE_SANITIZERS "Enable address and undefined behavior sanitizers" OFF)
+option(RUNA_BUILD_LIBFUZZER "Build the optional Clang libFuzzer release target" OFF)
 option(RUNA_MODULE_GPIO "Build Runa.GPIO" ON)
 option(RUNA_MODULE_ADC "Build Runa.ADC" ON)
 option(RUNA_MODULE_PWM "Build Runa.PWM" ON)
@@ -237,6 +238,20 @@ if(BUILD_TESTING AND JOB_BUILD_TESTS)
         target_compile_options(runa_foundation_tests PRIVATE -Wall -Wextra -Wpedantic -Wconversion -Wshadow -Werror)
     endif()
     add_test(NAME runa_foundation COMMAND runa_foundation_tests)
+    add_executable(runa_freeze_tests tests/runa_freeze_tests.c)
+    target_link_libraries(runa_freeze_tests PRIVATE runa_core)
+    target_include_directories(runa_freeze_tests PRIVATE
+        modules/gpio/include modules/adc/include modules/pwm/include
+        modules/spi/include modules/i2c/include modules/uart/include
+        modules/can/include modules/pulse/include modules/dac/include
+        modules/encoder/include modules/onewire/include modules/block_device/include
+        modules/rtc/include modules/watchdog/include)
+    if(MSVC)
+        target_compile_options(runa_freeze_tests PRIVATE /W4 /WX /permissive-)
+    else()
+        target_compile_options(runa_freeze_tests PRIVATE -Wall -Wextra -Wpedantic -Wconversion -Wshadow -Werror)
+    endif()
+    add_test(NAME runa_freeze COMMAND runa_freeze_tests)
     if(RUNA_MODULE_GPIO)
         add_executable(runa_module_tests tests/runa_module_tests.c)
         target_link_libraries(runa_module_tests PRIVATE runa_core runa_gpio)
@@ -386,6 +401,24 @@ if(JOB_BUILD_FUZZ)
         target_compile_options(job_fuzz PRIVATE /W4 /WX /permissive-)
     else()
         target_compile_options(job_fuzz PRIVATE -Wall -Wextra -Wpedantic -Wconversion -Wshadow -Werror)
+    endif()
+    if(RUNA_BUILD_LIBFUZZER AND CMAKE_C_COMPILER_ID MATCHES "Clang" AND
+       RUNA_MODULE_GPIO AND RUNA_MODULE_ADC AND RUNA_MODULE_PWM AND RUNA_MODULE_SPI AND
+       RUNA_MODULE_I2C AND RUNA_MODULE_UART AND RUNA_MODULE_CAN AND RUNA_MODULE_PULSE AND
+       RUNA_MODULE_DAC AND RUNA_MODULE_ENCODER AND RUNA_MODULE_ONEWIRE AND
+       RUNA_MODULE_BLOCK_DEVICE AND RUNA_MODULE_RTC AND RUNA_MODULE_WATCHDOG)
+        add_executable(runa_release_libfuzzer fuzz/runa_release_libfuzzer.c)
+        target_link_libraries(runa_release_libfuzzer PRIVATE job_engine)
+        target_include_directories(runa_release_libfuzzer PRIVATE
+            modules/gpio/include modules/adc/include modules/pwm/include
+            modules/spi/include modules/i2c/include modules/uart/include
+            modules/can/include modules/pulse/include modules/dac/include
+            modules/encoder/include modules/onewire/include modules/block_device/include
+            modules/rtc/include modules/watchdog/include)
+        target_compile_options(runa_release_libfuzzer PRIVATE
+            -fsanitize=fuzzer,address,undefined -fno-omit-frame-pointer
+            -Wall -Wextra -Wpedantic -Wconversion -Wshadow -Werror)
+        target_link_options(runa_release_libfuzzer PRIVATE -fsanitize=fuzzer,address,undefined)
     endif()
     add_executable(runa_capabilities_fuzz fuzz/runa_capabilities_fuzz.c)
     target_link_libraries(runa_capabilities_fuzz PRIVATE runa_core)
