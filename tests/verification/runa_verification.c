@@ -397,6 +397,148 @@ static void registry_resource_family(verify_prng_t *prng) {
     }
 }
 
+static size_t make_malformed_ext(uint8_t *data, uint16_t module_id, uint8_t operation,
+                                 uint8_t operand_size) {
+    const size_t instruction_size = (size_t)operand_size + 2u;
+    memset(data, 0, RUNA_HEADER_SIZE + instruction_size);
+    data[0] = 'J'; data[1] = 'E'; data[2] = 'X'; data[3] = 'E';
+    data[4] = RUNA_PROTOCOL_VERSION; data[5] = RUNA_IR_VERSION_V2;
+    runa_write_u16_le(data + 6u, RUNA_HEADER_SIZE);
+    runa_write_u32_le(data + 8u, 0xfeed0001u);
+    runa_write_u32_le(data + 12u, (uint32_t)(RUNA_HEADER_SIZE + instruction_size));
+    runa_write_u32_le(data + 16u, (uint32_t)instruction_size);
+    runa_write_u16_le(data + 20u, 1u);
+    runa_write_u32_le(data + 24u, RUNA_MAX_STEPS);
+    runa_write_u32_le(data + 28u, RUNA_MAX_RUNTIME_US);
+    runa_write_u16_le(data + 32u, RUNA_MAX_RESULT_BYTES);
+    runa_write_u16_le(data + 34u, RUNA_MAX_EMITS);
+    runa_write_u32_le(data + 36u, RUNA_MAX_EMIT_BYTES);
+    data[RUNA_HEADER_SIZE] = RUNA_OP_EXT;
+    data[RUNA_HEADER_SIZE + 1u] = operand_size;
+    if (operand_size >= 2u) runa_write_u16_le(data + RUNA_HEADER_SIZE + 2u, module_id);
+    if (operand_size >= 3u) data[RUNA_HEADER_SIZE + 4u] = operation;
+    return RUNA_HEADER_SIZE + instruction_size;
+}
+
+static void validation_matrix_family(void) {
+    runa_module_t modules[14] = {
+        runa_gpio_module(NULL), runa_adc_module(NULL), runa_pwm_module(NULL),
+        runa_spi_module(NULL), runa_i2c_module(NULL), runa_uart_module(NULL),
+        runa_can_module(NULL), runa_pulse_module(NULL), runa_dac_module(NULL),
+        runa_encoder_module(NULL), runa_onewire_module(NULL),
+        runa_block_device_module(NULL), runa_rtc_module(NULL), runa_watchdog_module(NULL)
+    };
+    runa_module_registry_t registry;
+    runa_resource_table_t resources = { NULL, 0u };
+    runa_decoded_job_t decoded;
+    runa_validation_error_t error;
+    uint8_t data[RUNA_MAX_JOB_BYTES];
+    const uint8_t sizes[] = { 0u, 1u, 2u, 3u, 4u, 8u, 16u, 255u };
+    uint32_t i;
+    runa_registry_init(&registry);
+    for (i = 0u; i < 14u; ++i) (void)runa_registry_add(&registry, &modules[i]);
+    for (i = 0u; i < 14u; ++i) {
+        uint32_t j;
+        for (j = 0u; j < (uint32_t)(sizeof sizes / sizeof sizes[0]); ++j) {
+            uint32_t k;
+            for (k = 0u; k < 4u; ++k) {
+                const size_t size = make_malformed_ext(data, (uint16_t)(i + 1u),
+                                                        (uint8_t)(k == 3u ? 255u : k), sizes[j]);
+                ++g_stats.cases;
+                CHECK_TRUE("ext-validation", g_stats.cases,
+                           runa_validate(data, size, &registry, &resources, &decoded, &error) != RUNA_OK);
+            }
+        }
+    }
+    for (i = 0u; i <= RUNA_HEADER_SIZE + 10u; ++i) {
+        const size_t size = make_malformed_ext(data, 1u, 2u, 3u);
+        ++g_stats.cases;
+        CHECK_TRUE("ext-prefix", i, runa_validate(data, i < size ? i : size,
+                                                   &registry, &resources, &decoded, &error) != RUNA_OK);
+    }
+}
+
+typedef struct lifecycle_state {
+    uint8_t index;
+    uint8_t fail_at;
+    uint8_t begins;
+    uint8_t ends;
+    uint8_t order[8];
+} lifecycle_state_t;
+
+static uint8_t g_lifecycle_order[8];
+static uint8_t g_lifecycle_count;
+
+static runa_status_t lifecycle_begin(void *context, const runa_module_job_t *job) {
+    lifecycle_state_t *state = (lifecycle_state_t *)context;
+    (void)job;
+    ++state->begins;
+    return state->index == state->fail_at ? RUNA_ERR_INTERNAL : RUNA_OK;
+}
+
+static runa_status_t lifecycle_end(void *context, const runa_module_job_t *job,
+                                   runa_status_t status) {
+    lifecycle_state_t *state = (lifecycle_state_t *)context;
+    (void)job; (void)status;
+    state->order[state->ends] = state->index;
+    g_lifecycle_order[g_lifecycle_count] = state->index;
+    ++g_lifecycle_count;
+    ++state->ends;
+    return RUNA_OK;
+}
+
+static void lifecycle_family(void) {
+    runa_module_t modules[8];
+    lifecycle_state_t states[8];
+    runa_module_registry_t registry;
+    runa_module_job_t job = { 0 };
+    uint32_t failure;
+    uint32_t i;
+    for (i = 0u; i < 8u; ++i) {
+        memset(&states[i], 0, sizeof states[i]);
+        states[i].index = (uint8_t)i;
+        memset(&modules[i], 0, sizeof modules[i]);
+        modules[i].module_id = (uint16_t)(200u + i);
+        modules[i].abi_version = RUNA_MODULE_ABI_VERSION;
+        modules[i].validate = synthetic_validate;
+        modules[i].execute = synthetic_execute;
+        modules[i].validate_resource = synthetic_resource;
+        modules[i].begin = lifecycle_begin;
+        modules[i].end = lifecycle_end;
+        modules[i].context = &states[i];
+    }
+    for (failure = 0u; failure < 8u; ++failure) {
+        runa_status_t status;
+        runa_registry_init(&registry);
+        for (i = 0u; i < 8u; ++i) {
+            states[i].fail_at = (uint8_t)failure;
+            states[i].begins = 0u;
+            states[i].ends = 0u;
+        }
+        for (i = 0u; i < 8u; ++i) (void)runa_registry_add(&registry, &modules[i]);
+        status = runa_registry_begin_job(&registry, &job);
+        ++g_stats.cases;
+        CHECK_EQ("lifecycle-failure", failure, RUNA_ERR_INTERNAL, status);
+        for (i = 0u; i < 8u; ++i) {
+            CHECK_EQ("lifecycle-failure", failure, i <= failure ? 1u : 0u,
+                     states[i].begins);
+            CHECK_EQ("lifecycle-failure", failure, i < failure ? 1u : 0u,
+                     states[i].ends);
+        }
+    }
+    runa_registry_init(&registry);
+    g_lifecycle_count = 0u;
+    for (i = 0u; i < 8u; ++i) {
+        states[i].fail_at = 255u; states[i].begins = 0u; states[i].ends = 0u;
+        (void)runa_registry_add(&registry, &modules[i]);
+    }
+    CHECK_EQ("lifecycle-order", 0u, RUNA_OK, runa_registry_begin_job(&registry, &job));
+    CHECK_EQ("lifecycle-order", 1u, RUNA_OK, runa_registry_end_job(&registry, &job, RUNA_OK));
+    CHECK_EQ("lifecycle-order", 2u, 8u, g_lifecycle_count);
+    for (i = 0u; i < 8u; ++i)
+        CHECK_EQ("lifecycle-order", i, 7u - i, g_lifecycle_order[i]);
+}
+
 int main(void) {
     verify_prng_t prng = { UINT64_C(0x9e3779b97f4a7c15) };
     g_stats.family = "campaign";
@@ -407,6 +549,8 @@ int main(void) {
     deterministic_replay_and_soak();
     capability_family();
     registry_resource_family(&prng);
+    validation_matrix_family();
+    lifecycle_family();
     printf("verification cases=%" PRIu64 " assertions=%" PRIu64
            " failures=%" PRIu64 " seed=0x%016" PRIx64 "\n",
            g_stats.cases, g_stats.assertions, g_stats.failures, g_stats.seed);
