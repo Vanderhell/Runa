@@ -4,6 +4,7 @@
 #include "runa_capabilities.h"
 #include "runa_validator.h"
 
+#include <string.h>
 #include <stdio.h>
 
 static runa_status_t validate(void *context, const runa_module_job_t *job,
@@ -109,6 +110,17 @@ int main(void) {
         if (runa_capabilities_encode(&registry, capabilities, sizeof capabilities, &written) != RUNA_OK ||
             runa_capabilities_decode(capabilities, written, &view) != RUNA_OK ||
             view.module_count != RUNA_MAX_MODULES) return 17;
+        {
+            uint8_t malformed[RUNA_MAX_CAPABILITY_BYTES];
+            memcpy(malformed, capabilities, written);
+            runa_write_u16_le(malformed + 36u, 0u);
+            if (runa_capabilities_decode(malformed, written, &view) != RUNA_ERR_INVALID_FORMAT)
+                return 18;
+            memcpy(malformed, capabilities, written);
+            malformed[38u] = 0u;
+            if (runa_capabilities_decode(malformed, written, &view) != RUNA_ERR_INVALID_FORMAT)
+                return 19;
+        }
     }
     puts("runa foundation registry/resource checks passed");
     return 0;

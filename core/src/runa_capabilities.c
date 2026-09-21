@@ -109,6 +109,8 @@ runa_status_t runa_capabilities_decode(const uint8_t *data, size_t size,
             module->module_id = runa_read_u16_le(data + offset + 4u);
             module->abi_version = data[offset + 6u];
             module->module_version = data[offset + 7u];
+            if (module->module_id == 0u || module->abi_version == 0u)
+                return RUNA_ERR_INVALID_FORMAT;
             module->payload_size = payload_size;
             module->payload = data + offset + RUNA_MODULE_RECORD_HEADER_SIZE;
             for (index = 0u; index < view->module_count; ++index) {

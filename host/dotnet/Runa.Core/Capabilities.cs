@@ -35,7 +35,8 @@ public static class CapabilitiesDecoder {
                 ushort payloadLength = BinaryPrimitives.ReadUInt16LittleEndian(bytes[(offset + 8)..]);
                 if (payloadLength > length - 10) throw new FormatException("Invalid module capability payload length.");
                 ushort moduleId = BinaryPrimitives.ReadUInt16LittleEndian(bytes[(offset + 4)..]);
-                if (moduleId == 0 || !ids.Add(moduleId)) throw new FormatException("Invalid or duplicate module ID.");
+                if (moduleId == 0 || bytes[offset + 6] == 0 || !ids.Add(moduleId))
+                    throw new FormatException("Invalid module capability identity.");
                 modules.Add(new(moduleId, bytes[offset + 6], bytes[offset + 7],
                     bytes.Slice(offset + 10, payloadLength).ToArray()));
             }
