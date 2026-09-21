@@ -5,6 +5,8 @@
 #include "esp_err.h"
 #include "esp_rom_sys.h"
 #include "esp_timer.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 
 #include <stdbool.h>
 
@@ -87,7 +89,7 @@ static runa_status_t receive_symbols(runa_esp32_pulse_state_t *state, uint32_t t
         .signal_range_min_ns = 1000u,
         .signal_range_max_ns = 1000000000u
     };
-    uint32_t timeout_ms = (timeout_us + 999u) / 1000u;
+    uint64_t start;
     runa_status_t status;
     if (timeout_us == 0u || timeout_us > RUNA_ESP32_PULSE_MAX_TIMEOUT_US)
         return RUNA_ERR_OUT_OF_RANGE;
@@ -96,9 +98,14 @@ static runa_status_t receive_symbols(runa_esp32_pulse_state_t *state, uint32_t t
     status = map_status(rmt_receive(state->capture, state->symbols,
                                     sizeof state->symbols, &receive_config));
     if (status != RUNA_OK) return status;
-    status = map_status(rmt_rx_wait_all_done(state->capture, (int)timeout_ms));
-    if (status != RUNA_OK || !state->capture_done)
-        return status == RUNA_OK ? RUNA_ERR_IO_TIMEOUT : status;
+    start = (uint64_t)esp_timer_get_time();
+    while (!state->capture_done) {
+        if ((uint64_t)esp_timer_get_time() - start >= timeout_us) {
+            (void)rmt_disable(state->capture);
+            return RUNA_ERR_IO_TIMEOUT;
+        }
+        vTaskDelay(1u);
+    }
     return RUNA_OK;
 }
 

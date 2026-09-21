@@ -30,8 +30,8 @@ runa_status_t runa_esp32_can_init(const runa_can_resource_config_t *configuratio
     twai_filter_config_t filter = TWAI_FILTER_CONFIG_ACCEPT_ALL();
     esp_err_t status;
     if (configuration == NULL || handle == NULL || configuration->controller != 0u ||
-        configuration->bitrate != 125000u && configuration->bitrate != 250000u &&
-        configuration->bitrate != 500000u && configuration->bitrate != 1000000u)
+        (configuration->bitrate != 125000u && configuration->bitrate != 250000u &&
+         configuration->bitrate != 500000u && configuration->bitrate != 1000000u))
         return RUNA_ERR_INVALID_FORMAT;
     general.mode = configuration->listen_only != 0u ? TWAI_MODE_LISTEN_ONLY : TWAI_MODE_NORMAL;
     general.tx_queue_len = 1u;
