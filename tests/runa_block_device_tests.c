@@ -89,6 +89,25 @@ static size_t make_job(uint8_t *job, uint32_t id, uint8_t operation, uint16_t re
     return total;
 }
 
+static size_t make_adversarial_job(uint8_t *job, uint8_t operation, uint16_t resource_id) {
+    static const uint8_t data[] = { 0x11u, 0x22u, 0x33u, 0x44u };
+    uint32_t offset = operation == RUNA_BLOCK_DEVICE_OP_ERASE ? 16u : 4u;
+    uint32_t length = operation == RUNA_BLOCK_DEVICE_OP_SYNC ? 0u :
+                      (operation == RUNA_BLOCK_DEVICE_OP_ERASE ? 16u : 4u);
+    size_t size = make_job(job, 0x70000000u, operation, resource_id, offset, length,
+                           operation == RUNA_BLOCK_DEVICE_OP_WRITE ? data : NULL,
+                           operation == RUNA_BLOCK_DEVICE_OP_WRITE ? sizeof data : 0u, 1);
+    size_t invalid_offset = size - 3u;
+    memmove(job + invalid_offset + 5u, job + invalid_offset, 3u);
+    job[invalid_offset] = RUNA_OP_EXT; job[invalid_offset + 1u] = 3u;
+    runa_write_u16_le(job + invalid_offset + 2u, RUNA_BLOCK_DEVICE_MODULE_ID);
+    job[invalid_offset + 4u] = 99u;
+    runa_write_u32_le(job + 12u, (uint32_t)(size + 5u));
+    runa_write_u32_le(job + 16u, (uint32_t)(size + 5u - RUNA_HEADER_SIZE));
+    runa_write_u16_le(job + 20u, 3u);
+    return size + 5u;
+}
+
 static int run_case(uint8_t *job, size_t job_size, const runa_resource_table_t *resources,
                     const runa_module_registry_t *registry, runa_block_device_mock_t *mock,
                     fixture_t *fixture, runa_status_t expected, uint8_t expected_events) {
@@ -243,6 +262,19 @@ int main(void) {
                storage[9] == 0xadu && storage[10] != 0xbeu,
                "partial write failure has no rollback")) return 1;
     mock.write_failure = RUNA_OK;
+
+    configuration.capability_flags |= RUNA_BLOCK_CAP_ERASE | RUNA_BLOCK_CAP_SYNC;
+    for (unsigned case_index = 0u; case_index < 1000u; ++case_index) {
+        uint8_t operation = (uint8_t)(RUNA_BLOCK_DEVICE_OP_WRITE + (case_index % 3u));
+        memset(&mock, 0, sizeof mock); memset(&fixture, 0, sizeof fixture);
+        job_size = make_adversarial_job(job, operation, 7u);
+        if (!check(run_case(job, job_size, &resources, &registry, &mock, &fixture,
+                            RUNA_ERR_INVALID_OPCODE, 1u) && mock.write_calls == 0u &&
+                   mock.erase_calls == 0u && mock.sync_calls == 0u,
+                   "late invalid operation has no mutation")) {
+            return 2;
+        }
+    }
 
     printf("Runa.BlockDevice native checks passed\n");
     return 0;

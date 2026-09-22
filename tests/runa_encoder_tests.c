@@ -101,6 +101,19 @@ static size_t make_job(uint8_t *job, uint8_t operation, uint16_t resource_id, ui
     return RUNA_HEADER_SIZE + instruction_bytes;
 }
 
+static size_t make_adversarial_job(uint8_t *job, uint8_t operation, uint16_t resource_id) {
+    size_t size = make_job(job, operation, resource_id, 0u);
+    size_t invalid_offset = size - 3u;
+    memmove(job + invalid_offset + 5u, job + invalid_offset, 3u);
+    job[invalid_offset] = RUNA_OP_EXT; job[invalid_offset + 1u] = 3u;
+    runa_write_u16_le(job + invalid_offset + 2u, RUNA_ENCODER_MODULE_ID);
+    job[invalid_offset + 4u] = 99u;
+    runa_write_u32_le(job + 12u, (uint32_t)(size + 5u));
+    runa_write_u32_le(job + 16u, (uint32_t)(size + 5u - RUNA_HEADER_SIZE));
+    runa_write_u16_le(job + 20u, 3u);
+    return size + 5u;
+}
+
 static runa_execution_summary_t run_job(uint8_t *job, size_t size,
                                         encoder_fixture_t *fixture,
                                         runa_resource_table_t *resources,
@@ -251,6 +264,15 @@ int main(void) {
     resource.resource_type = 2u;
     if (runa_resource_table_validate(&resources, &registry) != RUNA_ERR_RESOURCE_TYPE) return 16;
     resource.resource_type = RUNA_ENCODER_RESOURCE_TYPE;
+
+    for (unsigned case_index = 0u; case_index < 1000u; ++case_index) {
+        uint8_t operation = case_index & 1u ? RUNA_ENCODER_OP_READ_RESET : RUNA_ENCODER_OP_RESET;
+        memset(&fixture, 0, sizeof fixture);
+        summary = run_job(job, make_adversarial_job(job, operation, resource.id),
+                          &fixture, &resources, &registry);
+        if (summary.error == RUNA_OK || fixture.reset_calls != 0u ||
+            fixture.read_reset_calls != 0u) return 18;
+    }
 
     hal.read_reset = NULL;
     encoder = runa_encoder_module(&hal);
