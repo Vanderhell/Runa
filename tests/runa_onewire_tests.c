@@ -142,6 +142,18 @@ static size_t make_transfer(uint8_t *job, uint16_t resource_id, uint8_t flags,
     return offset;
 }
 
+static size_t make_adversarial_transfer(uint8_t *job, uint16_t resource_id,
+                                        const uint8_t *transmit, uint8_t transmit_size) {
+    size_t size = make_transfer(job, resource_id, 0u, transmit, transmit_size, 1u);
+    size_t invalid_offset = size - 3u;
+    memmove(job + invalid_offset + 5u, job + invalid_offset, 3u);
+    job[invalid_offset] = RUNA_OP_EXT; job[invalid_offset + 1u] = 3u;
+    runa_write_u16_le(job + invalid_offset + 2u, RUNA_ONEWIRE_MODULE_ID);
+    job[invalid_offset + 4u] = 99u;
+    finish_job(job, size + 5u, 3u);
+    return size + 5u;
+}
+
 static size_t make_search(uint8_t *job, uint16_t resource_id, uint8_t maximum_results) {
     uint8_t payload[7] = {0u};
     uint8_t mask = 0u;
@@ -242,6 +254,14 @@ int main(void) {
         summary = runa_process(job, offset, &resources, &registry, &platform, &sink);
     }
     if (summary.error != RUNA_ERR_INVALID_OPERAND || fixture.transfer_calls != 0u || fixture.event_count != 1u) return 8;
+    for (unsigned case_index = 0u; case_index < 1000u; ++case_index) {
+        memset(&fixture, 0, sizeof fixture);
+        summary = runa_process(job, make_adversarial_transfer(job, 8u, tx,
+                                                              (uint8_t)(case_index % 3u)),
+                               &resources, &registry, &platform, &sink);
+        if (summary.error == RUNA_OK || fixture.transfer_calls != 0u ||
+            fixture.reset_calls != 0u || fixture.search_calls != 0u) return 9;
+    }
     puts("Runa.OneWire bounded reset/transfer/search checks passed");
     return 0;
 }

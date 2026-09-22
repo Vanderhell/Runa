@@ -227,6 +227,13 @@ int main(void) {
     summary = runa_process(raw, runa_read_u32_le(raw + 12u), &resources, &registry, &platform, &sink);
     CHECK(summary.accepted == 0u && summary.result_sent == 1u && mock.set_calls == 3u &&
           mock.current_time.seconds == 0u && clock.now == 100u);
+    mock.set_calls = 0u;
+    for (uint32_t case_index = 0u; case_index < 1000u; ++case_index) {
+        uint64_t candidate = case_index % 2u == 0u ? RUNA_RTC_MAX_SECONDS : case_index;
+        (void)make_set_job(raw, 0x5000u + case_index, candidate, 1u);
+        summary = runa_process(raw, runa_read_u32_le(raw + 12u), &resources, &registry, &platform, &sink);
+        CHECK(summary.error != RUNA_OK && mock.set_calls == 0u);
+    }
     return 0;
 #undef CHECK
 }

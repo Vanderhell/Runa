@@ -40,6 +40,17 @@ static size_t make_job(uint8_t *job, uint32_t value, uint8_t operation, uint8_t 
     runa_write_u32_le(job + 12u, (uint32_t)(RUNA_HEADER_SIZE + instruction_size)); runa_write_u32_le(job + 16u, (uint32_t)instruction_size);
     runa_write_u16_le(job + 20u, 3u); return RUNA_HEADER_SIZE + instruction_size;
 }
+static size_t make_adversarial_job(uint8_t *job, uint32_t value) {
+    size_t size = make_job(job, value, RUNA_DAC_OP_WRITE, 0u, 6u);
+    size_t invalid_offset = size - 3u;
+    memmove(job + invalid_offset + 5u, job + invalid_offset, 3u);
+    job[invalid_offset] = RUNA_OP_EXT; job[invalid_offset + 1u] = 3u;
+    runa_write_u16_le(job + invalid_offset + 2u, RUNA_DAC_MODULE_ID); job[invalid_offset + 4u] = 99u;
+    runa_write_u32_le(job + 12u, (uint32_t)(size + 5u));
+    runa_write_u32_le(job + 16u, (uint32_t)(size + 5u - RUNA_HEADER_SIZE));
+    runa_write_u16_le(job + 20u, 4u);
+    return size + 5u;
+}
 static runa_execution_summary_t run_job(state_t *state, const runa_dac_resource_config_t *config,
                                          uint32_t permissions, uint32_t value, uint8_t operation,
                                          uint8_t reg, uint8_t ext_size) {
@@ -92,6 +103,22 @@ int main(void) {
         uint32_t value = case_index % 7u == 0u ? config->maximum_value :
                          (uint32_t)(case_index % config->maximum_value);
         if (!valid(&state, config, value)) return 11;
+    }
+    for (size_t case_index = 0u; case_index < 1000u; ++case_index) {
+        const runa_dac_resource_config_t *config = &configs[case_index % (sizeof configs / sizeof configs[0])];
+        runa_execution_summary_t summary; uint8_t job[128];
+        runa_dac_hal_t test_hal = { &state, write_mock }; runa_module_t test_module = runa_dac_module(&test_hal);
+        runa_module_registry_t test_registry; runa_resource_t item = { 9u, RUNA_DAC_MODULE_ID,
+            RUNA_DAC_RESOURCE_TYPE, 0u, RUNA_PERMISSION_WRITE, 0x55u, config };
+        runa_resource_table_t table = { &item, 1u }; runa_platform_t platform = { &state, time_us, delay_ms };
+        runa_event_sink_t events = { sink, &state };
+        runa_registry_init(&test_registry); (void)runa_registry_add(&test_registry, &test_module);
+        memset(&state, 0, sizeof state);
+        uint32_t generated_value = config->maximum_value == UINT32_MAX ? (uint32_t)case_index :
+                                   (uint32_t)(case_index % (config->maximum_value + 1u));
+        summary = runa_process(job, make_adversarial_job(job, generated_value),
+                               &table, &test_registry, &platform, &events);
+        if (summary.error == RUNA_OK || state.calls != 0u) return 12;
     }
     puts("Runa.DAC focused checks passed"); return 0;
 }

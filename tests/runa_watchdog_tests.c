@@ -216,6 +216,14 @@ int main(void) {
                       make_job(job, RUNA_WATCHDOG_OP_ARM, payload, 6u), &registry);
     if (summary.error != RUNA_ERR_INVALID_RESOURCE || mock.arm_calls != 1u) return 15;
 
+    resource.module_id = RUNA_WATCHDOG_MODULE_ID;
+    for (uint32_t case_index = 0u; case_index < 1000u; ++case_index) {
+        mock.arm_calls = 0u; mock.feed_calls = 0u; mock.disarm_calls = 0u;
+        summary = run_job(&fixture, &mock, &resource, job, make_malformed_after_arm(job), &registry);
+        if (summary.error == RUNA_OK || mock.arm_calls != 0u || mock.feed_calls != 0u ||
+            mock.disarm_calls != 0u) return 16;
+    }
+
     puts("Runa.Watchdog validation, authority, persistence and expiry checks passed");
     return 0;
 }
