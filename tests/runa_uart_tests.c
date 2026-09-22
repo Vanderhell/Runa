@@ -164,6 +164,28 @@ int main(void) {
         result = runa_process(job, make_adversarial_job(job), &resources, &registry, &platform, &sink);
         if (result.error == RUNA_OK || state.calls != 0u) return 8;
     }
+    configuration.maximum_tx_bytes = 64u;
+    configuration.maximum_rx_bytes = 64u;
+    for (unsigned case_index = 0u; case_index < 10000u; ++case_index) {
+        unsigned variant = case_index % 8u;
+        memset(&state, 0, sizeof state);
+        if (variant == 0u) {
+            result = runa_process(job, make_job(job, 1u, 1u, RUNA_UART_RX_FIXED_LENGTH,
+                                                100000u, RUNA_UART_OP_TRANSFER, 13u),
+                                   &resources, &registry, &platform, &sink);
+            if (result.error != RUNA_OK || state.calls != 1u) return 12;
+        } else {
+            uint8_t operation = variant == 1u ? 99u : RUNA_UART_OP_TRANSFER;
+            uint8_t operand_size = variant == 2u ? 12u : 13u;
+            uint8_t rx = variant == 3u || variant >= 6u ? 65u : 1u;
+            uint32_t timeout = variant == 4u ? 0u : 100000u;
+            uint8_t policy = variant == 5u ? 2u : RUNA_UART_RX_FIXED_LENGTH;
+            result = runa_process(job, make_job(job, 1u, rx, policy, timeout,
+                                                operation, operand_size),
+                                   &resources, &registry, &platform, &sink);
+            if (result.error == RUNA_OK || state.calls != 0u) return 13;
+        }
+    }
     puts("Runa.UART bounded transfer checks passed");
     return 0;
 }

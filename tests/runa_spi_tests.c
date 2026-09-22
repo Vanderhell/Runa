@@ -175,6 +175,22 @@ int main(void) {
         result = runa_process(job, make_adversarial_job(job), &resources, &registry, &platform, &sink);
         if (result.error == RUNA_OK || state.calls != 0u) return 8;
     }
+    resource.permissions = RUNA_PERMISSION_READ | RUNA_PERMISSION_WRITE;
+    for (unsigned case_index = 0u; case_index < 10000u; ++case_index) {
+        unsigned variant = case_index % 7u;
+        memset(&state, 0, sizeof state);
+        if (variant == 0u) {
+            result = runa_process(job, make_job(job, 51u, 100u), &resources, &registry,
+                                   &platform, &sink);
+            if (result.error != RUNA_OK || state.calls != 1u) return 9;
+        } else {
+            uint8_t rx = variant == 1u || variant >= 3u ? 65u : 1u;
+            uint16_t timeout = variant == 2u ? 0u : 100u;
+            result = runa_process(job, make_job(job, rx, timeout), &resources, &registry,
+                                   &platform, &sink);
+            if (result.error == RUNA_OK || state.calls != 0u) return 10;
+        }
+    }
 
     puts("Runa.SPI bounded transfer checks passed");
     return 0;

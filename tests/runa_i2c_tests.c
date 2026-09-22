@@ -164,6 +164,28 @@ int main(void) {
         result = runa_process(job, make_adversarial_job(job), &resources, &registry, &platform, &sink);
         if (result.error == RUNA_OK || state.calls != 0u) return 8;
     }
+    resource.permissions = RUNA_PERMISSION_READ | RUNA_PERMISSION_WRITE;
+    configuration.address = 0x48u;
+    configuration.maximum_tx_bytes = 64u;
+    configuration.maximum_rx_bytes = 64u;
+    for (unsigned case_index = 0u; case_index < 10000u; ++case_index) {
+        unsigned variant = case_index % 8u;
+        memset(&state, 0, sizeof state);
+        if (variant == 0u) {
+            result = runa_process(job, make_job(job, 3u, 1u, 100u, RUNA_I2C_OP_TRANSFER, 12u),
+                                   &resources, &registry, &platform, &sink);
+            if (result.error != RUNA_OK || state.calls != 1u) return 9;
+        } else {
+            uint8_t tx = variant == 1u || variant >= 6u ? 65u : 3u;
+            uint8_t rx = variant == 2u ? 65u : 1u;
+            uint16_t timeout = variant == 3u ? 0u : 100u;
+            uint8_t operation = variant == 4u ? 99u : RUNA_I2C_OP_TRANSFER;
+            uint8_t operand_size = variant == 5u ? 11u : 12u;
+            result = runa_process(job, make_job(job, tx, rx, timeout, operation, operand_size),
+                                   &resources, &registry, &platform, &sink);
+            if (result.error == RUNA_OK || state.calls != 0u) return 10;
+        }
+    }
 
     puts("Runa.I2C bounded transfer checks passed");
     return 0;

@@ -189,6 +189,27 @@ int main(void) {
         if (result.error == RUNA_OK || mock.count_calls != 0u || mock.width_calls != 0u ||
             mock.period_calls != 0u) return 11;
     }
+    for (unsigned case_index = 0u; case_index < 5000u; ++case_index) {
+        unsigned variant = case_index % 7u;
+        uint8_t operation = (uint8_t)(variant == 1u ? RUNA_PULSE_OP_MEASURE_WIDTH :
+                                      (variant == 2u ? RUNA_PULSE_OP_MEASURE_PERIOD : RUNA_PULSE_OP_COUNT));
+        uint8_t selector = operation == RUNA_PULSE_OP_COUNT ? RUNA_PULSE_EDGE_RISING :
+                           (operation == RUNA_PULSE_OP_MEASURE_WIDTH ? RUNA_PULSE_LEVEL_HIGH :
+                                                                        RUNA_PULSE_EDGE_FALLING);
+        uint32_t bound = variant == 3u || variant >= 6u ? 1001u : 100u;
+        uint32_t max_count = variant == 4u ? 101u : 100u;
+        if (variant == 5u) selector = 99u;
+        memset(&fixture, 0, sizeof fixture);
+        memset(&mock, 0, sizeof mock);
+        mock.count_value = 1u; mock.width_value = 2u; mock.period_value = 3u;
+        result = runa_process(job, make_job(job, operation, 8u, selector, bound, max_count,
+                                            (uint8_t)(operation == RUNA_PULSE_OP_COUNT ? 0u : 1u)),
+                              &resources, &registry, &platform, &sink);
+        if (variant <= 2u) {
+            if (result.error != RUNA_OK) return 12;
+        } else if (result.error == RUNA_OK || mock.count_calls != 0u ||
+                   mock.width_calls != 0u || mock.period_calls != 0u) return 13;
+    }
 
     puts("Runa.Pulse bounded measurement checks passed");
     return 0;

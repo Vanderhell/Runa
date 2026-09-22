@@ -167,6 +167,23 @@ int main(void) {
         result = runa_process(job, make_adversarial_job(job), &resources, &registry, &platform, &sink);
         if (result.error == RUNA_OK || state.transmit_calls != 0u || state.receive_calls != 0u) return 8;
     }
+    resource.permissions = RUNA_PERMISSION_READ | RUNA_PERMISSION_WRITE;
+    for (unsigned case_index = 0u; case_index < 10000u; ++case_index) {
+        unsigned variant = case_index % 8u;
+        uint8_t operation = variant == 1u ? RUNA_CAN_OP_RECEIVE :
+                            (variant == 2u ? RUNA_CAN_OP_REQUEST_RESPONSE : RUNA_CAN_OP_TRANSMIT);
+        uint32_t identifier = (variant >= 3u) ? 0x800u : 0x100u;
+        uint8_t length = variant == 5u ? 9u : 2u;
+        memset(&state, 0, sizeof state);
+        result = runa_process(job, make_job(job, operation, identifier, length),
+                               &resources, &registry, &platform, &sink);
+        if (variant <= 2u) {
+            if (result.error != RUNA_OK || state.transmit_calls != (variant == 1u ? 0u : 1u) ||
+                state.receive_calls != (variant == 0u ? 0u : 1u)) return 9;
+        } else if (result.error == RUNA_OK || state.transmit_calls != 0u || state.receive_calls != 0u) {
+            return 10;
+        }
+    }
     puts("Runa.CAN bounded frame checks passed");
     return 0;
 }

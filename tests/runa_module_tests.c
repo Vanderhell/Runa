@@ -270,6 +270,22 @@ int main(void) {
             state.event_count != 2u || state.events[1][0] != RUNA_EVENT_RESULT) return 8;
     }
 
+    for (uint32_t case_index = 0u; case_index < 5000u; ++case_index) {
+        uint8_t generated[sizeof valid_instructions];
+        memcpy(generated, valid_instructions, sizeof generated);
+        uint32_t expected_value = case_index & 1u;
+        runa_write_u32_le(generated + 3u, expected_value);
+        memset(&state, 0, sizeof state);
+        job_size = make_job(job, generated, 3u, RUNA_IR_VERSION_V2);
+        result = runa_process(job, job_size, &resources, &registry, &platform, &sink);
+        if (result.error != RUNA_OK || state.writes != 1u || state.output != expected_value) {
+            (void)printf("generated GPIO failure case=%u error=%u writes=%u output=%u\\n",
+                         (unsigned)case_index, (unsigned)result.error,
+                         (unsigned)state.writes, (unsigned)state.output);
+            return 9;
+        }
+    }
+
     puts("Runa V2 module dispatch checks passed");
     return 0;
 }

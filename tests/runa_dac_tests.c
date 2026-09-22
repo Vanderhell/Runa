@@ -87,5 +87,11 @@ int main(void) {
         view.modules[0].payload_size != 4u || memcmp(view.modules[0].payload, (uint8_t[]){1u, 0u, 32u, 0u}, 4u) != 0) return 9;
     { runa_dac_resource_config_t bad = {0u, 8u, {0u, 0u, 0u}}; runa_resource_t item = {9u, 9u, 1u, 0u, 2u, 0u, &bad}; runa_resource_table_t table = {&item, 1u};
       if (runa_resource_table_validate(&table, &registry) != RUNA_ERR_INVALID_RESOURCE) return 10; }
+    for (size_t case_index = 0u; case_index < 5000u; ++case_index) {
+        const runa_dac_resource_config_t *config = &configs[case_index % (sizeof configs / sizeof configs[0])];
+        uint32_t value = case_index % 7u == 0u ? config->maximum_value :
+                         (uint32_t)(case_index % config->maximum_value);
+        if (!valid(&state, config, value)) return 11;
+    }
     puts("Runa.DAC focused checks passed"); return 0;
 }
