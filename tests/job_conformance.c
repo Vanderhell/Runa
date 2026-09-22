@@ -3,6 +3,8 @@
 #include "runa_ir.h"
 #include "runa_limits.h"
 #include "runa_opcode.h"
+#include "runa_capabilities.h"
+#include "runa_result.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -48,6 +50,22 @@ static FILE *open_write(const char *path) {
  return file;
 }
 int main(int argc,char **argv){FILE *file=NULL;long length;uint8_t data[JOB_MAX_BYTES];size_t count;
+ if(argc==4&&strcmp(argv[1],"--capability-batch")==0){FILE *output=open_write(argv[3]);uint8_t header[4],blob[RUNA_MAX_CAPABILITY_BYTES];
+  if(output==NULL)return 3;
+  file=open_read(argv[2]);if(file==NULL){fclose(output);return 3;}
+  while(fread(header,1,4u,file)==4u){uint32_t size=job_read_u32_le(header),status=UINT32_MAX,count_value=0u;uint8_t out[8];runa_capabilities_view_t view;
+   if(size<=sizeof blob&&fread(blob,1,size,file)==size){runa_status_t result=runa_capabilities_decode(blob,size,&view);status=(uint32_t)result;if(result==RUNA_OK)count_value=view.module_count;}
+   runa_write_u32_le(out,status);runa_write_u32_le(out+4u,count_value);if(fwrite(out,1,sizeof out,output)!=sizeof out){fclose(file);fclose(output);return 6;}
+  }fclose(file);fclose(output);return 0;
+ }
+ if(argc==4&&strcmp(argv[1],"--module-data-batch")==0){FILE *output=open_write(argv[3]);uint8_t header[4];
+  if(output==NULL)return 3;
+  file=open_read(argv[2]);if(file==NULL){fclose(output);return 3;}
+  while(fread(header,1,4u,file)==4u){uint32_t size=job_read_u32_le(header),status=1u;uint16_t module=0u,instruction=0u,sequence=0u,payload=0u;uint8_t blob[64],out[12];
+   if(size<=sizeof blob){size_t read_size=fread(blob,1,size,file);if(size>=16u&&read_size==size&&blob[0]==RUNA_EVENT_MODULE_DATA&&blob[1]==1u&&job_read_u16_le(blob+2u)==size&&job_read_u16_le(blob+14u)<=48u&&16u+job_read_u16_le(blob+14u)==size&&job_read_u16_le(blob+8u)!=0u){status=0u;module=job_read_u16_le(blob+8u);instruction=job_read_u16_le(blob+10u);sequence=job_read_u16_le(blob+12u);payload=job_read_u16_le(blob+14u);}}else{fseek(file,(long)size,SEEK_CUR);}
+   runa_write_u32_le(out,status);runa_write_u16_le(out+4u,module);runa_write_u16_le(out+6u,instruction);runa_write_u16_le(out+8u,sequence);runa_write_u16_le(out+10u,payload);if(fwrite(out,1,sizeof out,output)!=sizeof out){fclose(file);fclose(output);return 6;}
+  }fclose(file);fclose(output);return 0;
+ }
  if(argc==4&&strcmp(argv[1],"--encode-batch")==0){FILE *output=open_write(argv[3]);uint8_t job[JOB_MAX_BYTES],payload[252];uint8_t record[7],length_bytes[2];uint32_t job_id;uint16_t module_id,payload_size;uint8_t operation;
   if(output==NULL)return 3;
   file=open_read(argv[2]);

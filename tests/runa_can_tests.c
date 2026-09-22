@@ -83,8 +83,8 @@ static size_t make_job(uint8_t *job, uint8_t operation, uint32_t id, uint8_t len
     return RUNA_HEADER_SIZE + instruction_bytes;
 }
 
-static size_t make_adversarial_job(uint8_t *job) {
-    size_t size = make_job(job, RUNA_CAN_OP_TRANSMIT, 0x100u, 2u);
+static size_t make_adversarial_job(uint8_t *job, uint8_t operation) {
+    size_t size = make_job(job, operation, 0x100u, 2u);
     size_t invalid_offset = size - 3u;
     memmove(job + invalid_offset + 5u, job + invalid_offset, 3u);
     job[invalid_offset] = RUNA_OP_EXT;
@@ -164,8 +164,13 @@ int main(void) {
     resource.permissions = RUNA_PERMISSION_READ | RUNA_PERMISSION_WRITE;
     for (unsigned case_index = 0u; case_index < 1000u; ++case_index) {
         memset(&state, 0, sizeof state);
-        result = runa_process(job, make_adversarial_job(job), &resources, &registry, &platform, &sink);
+        result = runa_process(job, make_adversarial_job(job, RUNA_CAN_OP_TRANSMIT), &resources, &registry, &platform, &sink);
         if (result.error == RUNA_OK || state.transmit_calls != 0u || state.receive_calls != 0u) return 8;
+    }
+    for (unsigned case_index = 0u; case_index < 1000u; ++case_index) {
+        memset(&state, 0, sizeof state);
+        result = runa_process(job, make_adversarial_job(job, RUNA_CAN_OP_REQUEST_RESPONSE), &resources, &registry, &platform, &sink);
+        if (result.error == RUNA_OK || state.transmit_calls != 0u || state.receive_calls != 0u) return 11;
     }
     resource.permissions = RUNA_PERMISSION_READ | RUNA_PERMISSION_WRITE;
     for (unsigned case_index = 0u; case_index < 10000u; ++case_index) {
