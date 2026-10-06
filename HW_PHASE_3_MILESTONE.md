@@ -1,4 +1,9 @@
-# HW Phase 3 Milestone — Instrumented Electrical Validation
+# HW Phase 3 Milestone — Instrumented Electrical Validation — archived snapshot
+
+Historical validation milestone recorded on 2026-09-16. Its PASS status
+applies to the specific board, firmware, and GPIO/ADC/PWM tests described
+here; it is not a claim that later platform mappings have been physically
+validated.
 
 Date: 2026-09-16
 
@@ -7,7 +12,7 @@ Date: 2026-09-16
 - ESP32-S3 QFN56 revision 0.2
 - 16 MB flash
 - 8 MB octal PSRAM
-- Native USB Serial/JTAG on COM40
+- Native USB Serial/JTAG
 - ESP-IDF 5.5.1
 
 ## Wiring used

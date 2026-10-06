@@ -230,7 +230,9 @@ static class HardwareTests {
     }
 
     static async Task Main(string[] args) {
-        string port = args.Length == 0 ? "COM37" : args[0];
+        if (args.Length == 0)
+            throw new ArgumentException("Specify the target serial port as the first argument.");
+        string port = args[0];
         string mode = args.Length < 2 ? "baseline" : args[1];
         await using var transport = new WindowsSerialHardwareTransport(port, TimeSpan.FromSeconds(5));
         var runner = new HardwareTestRunner(transport);

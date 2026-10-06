@@ -1,4 +1,8 @@
-# ESP32 build verification
+# ESP32 build verification — historical validation snapshot
+
+Recorded in commit `53a3f074cff01e8434322394a28b32182751f1d3` (2026-09-21).
+This records a successful ESP-IDF build and compile-only platform checks; it
+does not claim that physical hardware was tested by this verification.
 
 Status: ESP-IDF build verified; physical hardware and USB transport testing not performed.
 
@@ -6,12 +10,10 @@ Status: ESP-IDF build verified; physical hardware and USB transport testing not 
 
 - Target: `esp32s3`
 - ESP-IDF: v5.5.1
-- IDF path: `C:\Espressif\frameworks\esp-idf-v5.5.1`
 - Python: 3.11.2
 - CMake: 3.30.2
 - Ninja: 1.12.1
 - Xtensa ESP32-S3 GCC: 14.2.0 (`esp-14.2.0_20241119`)
-- Build directory: `build-esp32-audit`
 
 The build was configured from a fresh isolated ESP-IDF build directory with an
 explicit `esp32s3` target. No ESP-IDF installation or system-wide environment

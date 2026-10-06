@@ -1,25 +1,23 @@
-# ESP32-S3 physical regression pre-flight
+# ESP32-S3 physical regression pre-flight — historical snapshot
 
 Status: **BLOCKED — HARDWARE REQUIRED**
 
-This report covers the current source tree at `master`, HEAD
-`bd20bd9c1aacf918c4742375246175867c2c32f9`, plus the existing uncommitted
-software/ESP32 audit changes. No firmware was flashed and no physical
-connection was made.
+This report records a pre-flight against source HEAD
+`bd20bd9c1aacf918c4742375246175867c2c32f9`, captured before the later
+repository changes. It is not a report for the current branch tip. At that
+pre-flight, no firmware was flashed and no physical connection was made.
 
 ## Board detection
 
-Windows currently enumerates only the motherboard's `COM1`:
+The board was not detected during that pre-flight. Port names and host device
+identifiers are omitted because they are local-machine details. Port numbers
+in older hardware milestone records are historical observations, not defaults
+for another system.
 
-`Communications Port (COM1)` / `ACPI\\PNP0501\\0`
+Therefore transport testing, flashing, and peripheral testing were stopped
+before hardware contact.
 
-No ESP32-S3 USB Serial/JTAG device is present. The historical `COM37` entries
-in older hardware milestone documents are not treated as current evidence.
-
-Therefore transport testing, flashing, and all peripheral testing are stopped
-before hardware contact. COM1 must not be used as the ESP32 port.
-
-## Current firmware resource map
+## Firmware resource map recorded at that pre-flight
 
 | Resource | Module | Pins / instance | Configuration |
 |---:|---|---|---|
@@ -55,7 +53,7 @@ The module IDs advertised by the current image remain `1,2,3,4,5,6,7,8,10`.
 No physical test is classified as verified until the board is detected and
 the exact wiring is recorded.
 
-## Current classification
+## Classification recorded at that pre-flight
 
 - USB Serial/JTAG: BLOCKED — HARDWARE REQUIRED
 - GPIO: BLOCKED — HARDWARE REQUIRED

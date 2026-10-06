@@ -1,4 +1,8 @@
-# HW Phase 2 Milestone — Pocket-Dongle-S3-0.96
+# HW Phase 2 Milestone — Pocket-Dongle-S3-0.96 — archived snapshot
+
+Historical validation milestone recorded on 2026-09-16. Its PASS status
+applies to the specific board, firmware, and tests described here; it is not a
+claim that later platform mappings have been physically validated.
 
 Date: 2026-09-16
 
@@ -15,7 +19,7 @@ The portable software core and ESP32-S3 v1 runtime are frozen at this milestone.
 
 - Pocket-Dongle-S3-0.96 with ESP32-S3 QFN56 revision 0.2
 - 16 MB flash and 8 MB octal PSRAM
-- USB Serial/JTAG transport on COM37
+- USB Serial/JTAG transport
 - Real ESP32 HAL paths active for GPIO, ADC, PWM, monotonic time, and delay
 - Logical GPIO output resource backed by GPIO1
 - Logical ADC resource backed by GPIO2 / ADC1_CH1

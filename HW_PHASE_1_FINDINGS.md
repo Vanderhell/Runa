@@ -1,4 +1,8 @@
-# HW Phase 1 Findings — ESP32-S3 / COM37
+# HW Phase 1 Findings — ESP32-S3 — archived validation snapshot
+
+Historical hardware validation recorded on 2026-09-16. Port identifiers and
+the device MAC address have been omitted as machine/device-specific details;
+the validation results below are preserved.
 
 Date: 2026-09-16
 
@@ -9,9 +13,8 @@ Date: 2026-09-16
 - Flash JEDEC manufacturer/device: `20:4018`
 - 8 MB embedded octal PSRAM (`AP_3v3`)
 - 40 MHz crystal
-- USB Serial/JTAG transport on `COM37`
+- USB Serial/JTAG transport
 - USB VID/PID: `303A:1001`
-- MAC: `3c:0f:02:d9:77:30`
 - Secure Boot disabled
 - Flash encryption disabled
 
@@ -33,7 +36,7 @@ The compiled resource table is intentionally empty because no physical GPIO, ADC
 
 ## Physical and protocol validation
 
-- Firmware built and flashed successfully to COM37
+- Firmware built and flashed successfully
 - Device booted and established host protocol communication
 - GET_INFO confirmed 16 MB flash and 8 MB PSRAM
 - GET_CAPABILITIES reported the frozen v1 opcode set and zero physical resources
@@ -49,7 +52,7 @@ GPIO, ADC, PWM, permission-path, and display tests were not claimed because no s
 
 ## Stability
 
-- 1,035 hardware checks passed on COM37
+- 1,035 hardware checks passed
 - A 500-job repeated sequence passed
 - No observed ESP32 reset
 - No framing desynchronization
@@ -84,4 +87,3 @@ GPIO, ADC, PWM, permission-path, and display tests were not claimed because no s
 ## Status
 
 ESP32-S3 HARDWARE PHASE 1: PASS
-

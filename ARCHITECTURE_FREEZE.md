@@ -1,8 +1,14 @@
-# Runa software architecture freeze
+# Runa software architecture freeze — historical milestone snapshot
 
-Status: software audit freeze for the current milestone.  This document records
-the contract verified by the native and host test matrix; it is not a promise of
-permanent ABI compatibility.
+This document records the software audit freeze as it stood at the time of
+its validation. Its deferred-work list is historical, not the current project
+status. Subsequent ESP32 build evidence is recorded in
+`ESP32_BUILD_VERIFICATION.md`; physical results and their limits are recorded
+in the `HW_PHASE_*_MILESTONE.md` files.
+
+Status at this snapshot: software audit freeze for that milestone. This
+document records the contract verified by the native and host test matrix; it
+is not a promise of permanent ABI compatibility.
 
 ## Frozen
 
@@ -66,7 +72,7 @@ permanent ABI compatibility.
 - The exact set of platform adapters and physical resource mappings.
 - Hardware timing, electrical characteristics, and reset/reporting behavior.
 
-## Deferred to hardware phase
+## Deferred at that milestone
 
 - ESP-IDF compilation and linker verification in the target environment.
 - Physical verification of every module and platform mapping.  Software mocks,
