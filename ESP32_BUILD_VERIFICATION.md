@@ -37,7 +37,9 @@ other platform compositions.
 
 SPI2 used GPIO 11/12/13 and CS 10. I2C0 used SDA 8, SCL 9, and address `0x50`.
 CAN used classic TWAI with one-entry transmit and receive queues. SPI and I2C
-resource mappings were compile-verified only.
+resource mappings were compile-verified only. The
+[hardware test guide](docs/hardware/ESP32S3_HARDWARE_TEST_GUIDE.md) contains
+per-module examples and procedures for physical validation.
 
 ## Validation limits
 

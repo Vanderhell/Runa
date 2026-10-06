@@ -44,8 +44,10 @@ Encoder. Its SPI and I2C mappings are compile-verified; the historical Phase 3
 hardware validation exercised GPIO, ADC, and PWM on its documented board
 configuration. The [ESP32 build report](ESP32_BUILD_VERIFICATION.md) and
 [archived hardware test reports](docs/archive/hardware/README.md) describe
-their validation scope. Hardware validation applies to the configurations
-listed in those reports.
+their validation scope. The [ESP32-S3 hardware test guide](docs/hardware/ESP32S3_HARDWARE_TEST_GUIDE.md)
+provides individual procedures for the current firmware composition, including
+the checks that still require a new physical run. Hardware validation applies
+to the configurations listed in the corresponding reports.
 
 ## Build and test
 
