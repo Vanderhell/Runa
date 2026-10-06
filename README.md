@@ -127,5 +127,5 @@ compatibility.
 
 ## License
 
-No `LICENSE` file is present. The repository's distribution terms are
-unspecified.
+Runa is licensed under the Apache License, Version 2.0. Copyright 2026
+Vanderhell. See [LICENSE](LICENSE) for the full license text.
