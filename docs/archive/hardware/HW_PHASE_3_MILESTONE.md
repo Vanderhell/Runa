@@ -141,15 +141,13 @@ The GPIO loopback value was correct, the ADC result remained within the raw rang
 - C# host suite passed 9 checks.
 - Native torture suite passed 20,125 checks with zero failures in each tested configuration.
 
-## Remaining unverified electrical properties
+## Measurements not covered by Phase 3
 
 - Exact PWM duty cycle at 25%, 50%, and 75%
 - PWM frequency accuracy and waveform quality under external instrumentation
 - ADC calibrated voltage accuracy and linearity
 
-These remaining measurements do not block the existing v1 architecture or the Phase 3 electrical-validation objective.
-
-## Git baseline
+## Source revisions
 
 - `0265fab Freeze ESP32-S3 v1 hardware baseline`
 - `79f9566 Add GPIO input resource for hardware loopback`

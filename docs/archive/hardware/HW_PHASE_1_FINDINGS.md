@@ -1,8 +1,6 @@
 # HW Phase 1 Findings — ESP32-S3 — archived validation snapshot
 
-Historical hardware validation recorded on 2026-09-16. Port identifiers and
-the device MAC address have been omitted as machine/device-specific details;
-the validation results below are preserved.
+Historical hardware validation recorded on 2026-09-16.
 
 Date: 2026-09-16
 
@@ -48,7 +46,8 @@ The compiled resource table is intentionally empty because no physical GPIO, ADC
 - Every accepted test job produced one ACK and exactly one final RESULT
 - Validation rejections produced one explicit RESULT without partial execution
 
-GPIO, ADC, PWM, permission-path, and display tests were not claimed because no safe board pin mapping was established. The real ESP timer and delay HAL path was exercised.
+No GPIO, ADC, PWM, permission-path, or display tests were run because a safe
+board pin mapping was unavailable. The ESP timer and delay HAL path was tested.
 
 ## Stability
 
@@ -78,7 +77,7 @@ GPIO, ADC, PWM, permission-path, and display tests were not claimed because no s
 - Image SHA-256 validation hash valid
 - Flash write completed with post-write hash verification
 
-## Git baseline
+## Source revisions
 
 - Software freeze tag: `software-core-freeze-v0.1`
 - ESP32 platform commit: `4f03582`

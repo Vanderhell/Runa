@@ -6,9 +6,10 @@ claim that later platform mappings have been physically validated.
 
 Date: 2026-09-16
 
-## Frozen baseline
+## Software and firmware baseline
 
-The portable software core and ESP32-S3 v1 runtime are frozen at this milestone.
+The portable software core and ESP32-S3 v1 runtime at this milestone used the
+following baseline:
 
 - Binary IR and execution semantics remain unchanged.
 - Validator, executor, protocol, C# SDK, and generic hardware runner remain the shared implementation.
@@ -48,27 +49,17 @@ The portable software core and ESP32-S3 v1 runtime are frozen at this milestone.
 - Native torture suite passed 20,125 checks with zero failures per tested configuration.
 - C# host suite passed all checks.
 
-## Electrical validation still outstanding
+## Measurements not included at this milestone
 
-The architecture, protocol, firmware integration, and ESP-IDF HAL call paths are verified. The following electrical behavior has not yet been instrumented and must not be claimed as physically measured:
+The following electrical measurements were not part of Phase 2. Phase 3
+records subsequent GPIO, ADC, and PWM electrical checks.
 
 - GPIO1 HIGH/LOW voltage was not measured or looped back.
 - GPIO4 PWM waveform, frequency, and duty cycle were not measured.
 - GPIO2 ADC was tested only as a floating input; accuracy at known voltages was not established.
 - The integrated ST7735S display and its output were not visually confirmed by this firmware.
 
-These limitations do not block the frozen v1 architecture.
-
-## Required validation before peripheral expansion
-
-Before adding I2C, SPI, UART, or other execution features, perform one short instrumented hardware-validation step:
-
-- Connect a safe GPIO output-to-input loopback and verify LOW-to-LOW and HIGH-to-HIGH through host-defined jobs.
-- Measure PWM with an oscilloscope or logic analyzer, or route it through an electrically safe measurement path.
-- Measure ADC at known 0 V and 3.3 V levels using a safe physical connection.
-- Optionally run and visually confirm the isolated board-level ST7735S smoke pattern.
-
-## Git baseline
+## Source revisions
 
 - ESP32 physical-resource implementation: `cfc161f`
 - Physical execution validation: `d9395d8`
