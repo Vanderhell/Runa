@@ -127,5 +127,5 @@ compatibility.
 
 ## License
 
-Runa is licensed under the Apache License, Version 2.0. Copyright 2026
-Vanderhell. See [LICENSE](LICENSE) for the full license text.
+Runa is licensed under the Apache License, Version 2.0. See [LICENSE](LICENSE)
+for the full license text and [NOTICE](NOTICE) for the copyright notice.
